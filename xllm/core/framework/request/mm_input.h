@@ -40,7 +40,35 @@ struct MMInputItem {
   torch::Tensor mm_embedding_;
 };
 
+struct MMPayload {
+  MMPayload() = default;
+  explicit MMPayload(const std::string& data, size_t offset = 0)
+      : data_(std::move(data)), offset_(offset) {}
+
+  bool get(std::string& value, size_t len) {
+    if (len == data_.size()) {
+      value = std::move(data_);
+      return true;
+    }
+
+    if (data_.size() - offset_ < len) {
+      return false;
+    }
+
+    value = data_.substr(offset_, len);
+    offset_ += len;
+
+    return true;
+  }
+
+  std::string data_;
+  size_t offset_;
+};
+
 struct MMInput {
+  MMInput() = default;
+  explicit MMInput(const std::string& payload) : payload_(payload) {}
+
   bool empty() const { return items_.empty(); }
   void clear() { items_.clear(); }
 
@@ -70,6 +98,7 @@ struct MMInput {
     return metas;
   }
 
+  MMPayload payload_;
   std::vector<MMInputItem> items_;
 };
 
@@ -82,7 +111,9 @@ class MMInputTransfer {
   bool trans(const std::vector<Message>& messages, MMInput& inputs);
 
  private:
-  bool trans(const MMContentVec& mmc, std::vector<MMInputItem>& inputs);
+  bool trans(const MMContentVec& mmc,
+             std::vector<MMInputItem>& inputs,
+             MMPayload& payload);
 
   std::unique_ptr<MMHandlerSet> mm_handlers_;
 };
