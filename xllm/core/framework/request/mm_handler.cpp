@@ -21,6 +21,7 @@ limitations under the License.
 
 #include "core/util/http_downloader.h"
 #include "mm_codec.h"
+#include "mm_embedding_handler.h"
 #include "mm_input.h"
 
 namespace xllm {
@@ -141,6 +142,7 @@ bool VideoHandler::decode(MMInputItem& input) {
 MMHandlerSet::MMHandlerSet() {
   handlers_["image_url"] = std::make_unique<ImageHandler>();
   handlers_["video_url"] = std::make_unique<VideoHandler>();
+  handlers_["mm_embedding"] = std::make_unique<MMEmbeddingHandler>();
   // handlers_["audio_url"] = std::make_unique<AudioHandler>();
 }
 
