@@ -22,6 +22,11 @@ cc_library(
     dit_worker.h
     embed_worker_impl.h
     embed_vlm_worker_impl.h
+    mm_embed_vlm_worker_impl.h
+    engine.h
+    llm_engine.h
+    vlm_engine.h
+    dit_engine.h
     worker_client.h
     xservice_client.h
     speculative_worker_impl.h
@@ -38,6 +43,10 @@ cc_library(
     dit_worker.cpp
     embed_worker_impl.cpp
     embed_vlm_worker_impl.cpp
+    mm_embed_vlm_worker_impl.cpp
+    llm_engine.cpp
+    vlm_engine.cpp
+    dit_engine.cpp
     worker_client.cpp
     xservice_client.cpp
     params_utils.cpp

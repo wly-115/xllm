@@ -197,6 +197,8 @@ bool Qwen2VLImageProcessor::process_images(std::vector<torch::Tensor> images,
     item.set_data({{"pixel_values", pixel_values}, {"image_grid_thw", thw}});
   }
 
+  mm_datas.add(
+      MMType::IMAGE, "n_images", static_cast<int64_t>(pixel_values.size()));
   return true;
 }
 
