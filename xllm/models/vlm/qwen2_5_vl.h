@@ -53,7 +53,9 @@ class Qwen2_5_VLInputProcessor : public InputProcessor {
     merge_size_ = args.mm_image_merge_size();
   }
 
-  void process(std::string& prompt, const MMData& mm_data) override {
+  void process(std::string& prompt, const MMData& datas) override {
+    MMBatchData mm_data({datas});
+
     torch::Tensor image_grid_thw;
     if (auto res = mm_data.get<torch::Tensor>("image_grid_thw"))
       image_grid_thw = res.value();

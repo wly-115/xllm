@@ -13,22 +13,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#pragma once
-
-#include <torch/torch.h>
-
-#include <string>
-
-#include "core/framework/request/mm_batch_data.h"
-#include "core/framework/request/mm_data.h"
+#include "mm_type.h"
 
 namespace xllm {
 
-class InputProcessor {
- public:
-  virtual ~InputProcessor() = default;
-
-  virtual void process(std::string& prompt, const MMData& mm_data) = 0;
-};
+std::optional<std::string> MMType::to_string() {
+  switch (value) {
+    case Value::NONE:
+      return std::nullopt;
+    case Value::IMAGE:
+      return "image";
+    case Value::VIDEO:
+      return "video";
+    case Value::AUDIO:
+      return "audio";
+    case Value::EMBEDDING:
+      return "embedding";
+    default:
+      LOG(WARNING) << "Unknown mm type: " << static_cast<int>(value);
+  }
+  return std::nullopt;
+}
 
 }  // namespace xllm

@@ -48,7 +48,9 @@ class GLM4VInputProcessor : public InputProcessor {
     merge_size_ = args.mm_image_merge_size();
   }
 
-  void process(std::string& prompt, const MMData& mm_data) override {
+  void process(std::string& prompt, const MMData& datas) override {
+    MMBatchData mm_data({datas});
+
     torch::Tensor image_grid_thw;
     if (auto res = mm_data.get<torch::Tensor>("image_grid_thw"))
       image_grid_thw = res.value();
@@ -59,7 +61,9 @@ class GLM4VInputProcessor : public InputProcessor {
 
     if (!image_grid_thw.defined() && !video_grid_thw.defined()) return;
 
-    const auto& video_metadata = mm_data.get_video_metadata();
+    std::vector<VideoMetadata> video_metadata;
+    datas.get_metadata(MMType::VIDEO, video_metadata);
+
     if (video_metadata.size() > 0) {
       CHECK(video_metadata.size() ==
             static_cast<size_t>(video_grid_thw.sizes()[0]));

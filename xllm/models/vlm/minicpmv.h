@@ -45,8 +45,10 @@ class MiniCPMInputProcessor : public InputProcessor {
     scale_resolution_ = args.mm_scale_resolution();
   }
 
-  void process(std::string& prompt, const MMData& mm_data) override {
-    auto image_sizes = mm_data.get_tensor_vec("image_sizes");
+  void process(std::string& prompt, const MMData& datas) override {
+    MMBatchData mm_data({datas});
+    std::vector<torch::Tensor> image_sizes;
+    mm_data.get("image_sizes", image_sizes);
 
     const std::regex pattern(R"(\(<image>[\s\S]*?</image>\))");
 
@@ -986,7 +988,8 @@ class MiniCPMV2_6Impl : public torch::nn::Module {
     if (const auto& res = mm_data.get<torch::Tensor>("image_embeds"))
       image_embeds = res.value();
 
-    auto pixel_values = mm_data.get_tensor_vec("pixel_values");
+    std::vector<torch::Tensor> pixel_values;
+    mm_data.get("pixel_values", pixel_values);
 
     torch::Tensor tgt_sizes;
     if (const auto& res = mm_data.get<torch::Tensor>("tgt_sizes"))
