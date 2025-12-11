@@ -31,8 +31,10 @@ bool MMData::has(const MMKey& key) const {
   if (hold<MMDict>()) {
     const auto& dict = items<MMDict>();
     const auto& itor = dict.find(key);
-
-    return itor != dict.end();
+    if (itor != dict.end())
+      return true;
+    else
+      return false;
   } else if (hold<MMItemVec>()) {
     const auto& vec = items<MMItemVec>();
     for (const auto& item : vec) {

@@ -524,8 +524,7 @@ INLINE void read_vector_tensor(const char*& buffer,
   }
 }
 
-INLINE void read_mm_data(const char*& buffer, MMData& mm_data) {
-  auto& mm_dict = mm_data.data();
+INLINE void read_mm_batch_data(const char*& buffer, MMBatchData& mm_data) {
   size_t size;
   read_data(buffer, size);
   uint32_t mm_type;

@@ -190,6 +190,7 @@ bool Qwen2VLImageProcessor::process_images(std::vector<torch::Tensor> images,
 
   for (const auto& img : images) {
     if (!this->process_image(img, pixel_values, thw)) {
+    if (!this->process_image(img, pixel_values, thw)) {
       return false;
     }
 
@@ -199,6 +200,10 @@ bool Qwen2VLImageProcessor::process_images(std::vector<torch::Tensor> images,
 
   mm_datas.add(
       MMType::IMAGE, "n_images", static_cast<int64_t>(pixel_values.size()));
+    auto& item = mm_datas.add(MMType::IMAGE);
+    item.set_data({{"pixel_values", pixel_values}, {"image_grid_thw", thw}});
+  }
+
   return true;
 }
 

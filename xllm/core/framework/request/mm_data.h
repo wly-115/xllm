@@ -173,6 +173,22 @@ class MMData {
     }
   }
 
+  template <typename T>
+  void get_metadata(MMType ty, std::vector<T>& metadatas) const {
+    if (!valid()) return;
+
+    if (!hold<MMItemVec>()) return;
+
+    const auto& item_vec = items<MMItemVec>();
+    for (const auto& item : item_vec) {
+      if (item.type() != ty) continue;
+
+      if (auto res = item.template get_metadata<T>()) {
+        metadatas.push_back(res.value());
+      }
+    }
+  }
+
   bool foreach (MMDataItem::IVisitor& v);
   bool foreach (MMDictItem::IVisitor& v);
 
