@@ -25,7 +25,7 @@ cc_library(
     minicpmv_image_processor.h
     qwen2_vl_image_processor.h
     glm4v_image_processor.h
-    pywarpper_image_processor.h
+    glm4v_image_processor.h
     input_processor.h
   SRCS
     image_processor.cpp

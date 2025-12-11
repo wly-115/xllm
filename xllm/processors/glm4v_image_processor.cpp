@@ -360,7 +360,6 @@ bool Glm4VImageProcessor::process_videos(
     MMData& mm_datas) {
   torch::Tensor pixel_values;
   torch::Tensor thw;
-
   const size_t video_size = videos.size();
   for (size_t i = 0; i < video_size; ++i) {
     auto& vid = videos[i];
