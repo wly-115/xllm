@@ -19,6 +19,7 @@ limitations under the License.
 
 #include <string>
 
+#include "core/framework/request/mm_batch_data.h"
 #include "core/framework/request/mm_data.h"
 
 namespace xllm {

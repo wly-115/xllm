@@ -91,10 +91,13 @@ class MMData {
     return true;
   }
 
+
+  void get(uint32_t type, std::vector<MMDataItem>& items) const;
+  void get(const MMKey& key, std::vector<torch::Tensor>& items) const;
+
   template <typename T>
   std::optional<T> get(const MMKey& key) const {
     if (!valid()) return std::nullopt;
-
     if (hold<MMDict>()) {
       auto& dict = items<MMDict>();
 
@@ -127,6 +130,7 @@ class MMData {
   }
 
   template <typename T>
+
   void set(uint32_t type, const T& item) {
     ty_ = type;
     items_ = item;
@@ -160,7 +164,6 @@ class MMData {
     const auto& item_vec = items<MMItemVec>();
     for (const auto& item : item_vec) {
       if (item.type() != ty) continue;
-
       if (auto res = item.template get_metadata<T>()) {
         metadatas.push_back(res.value());
       }

@@ -27,7 +27,6 @@ MMData::MMData(uint32_t ty, const MMDict& items)
 
 bool MMData::has(const MMKey& key) const {
   if (!valid()) return false;
-
   if (hold<MMDict>()) {
     const auto& dict = items<MMDict>();
     const auto& itor = dict.find(key);
@@ -79,13 +78,12 @@ MMDataItem& MMData::add(MMType type) {
   return vec.back();
 }
 
+
 void MMData::get(uint32_t type, MMItemVec& vec) const {
   if (!valid()) return;
 
   if (!hold<MMItemVec>()) return;
-
   const auto& data = items<MMItemVec>();
-
   for (const auto& item : data) {
     if (item.type() & type) {
       vec.emplace_back(item);

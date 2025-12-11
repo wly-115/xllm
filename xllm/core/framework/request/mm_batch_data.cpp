@@ -68,7 +68,6 @@ MMBatchData MMBatchData::to(const torch::Device& device) const {
       for (const auto& item : lst) {
         vec.emplace_back(safe_to(item, device, true));
       }
-
       dict[pair.first] = std::move(vec);
     }
   }
@@ -82,6 +81,7 @@ void MMBatchData::batch(const std::vector<MMData>& mm_datas) {
   CollectMMDataTensorVisitor visitor;
   this->foreach (static_cast<MMData::IVisitor&>(visitor));
 
+<<<<<<< HEAD
   MMDict dict;
   for (const auto& pair : visitor.datas_) {
     torch::Tensor tar;
