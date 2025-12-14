@@ -24,7 +24,9 @@ class MMEmbeddingHandler : public MMHandlerBase {
   MMEmbeddingHandler() = default;
   ~MMEmbeddingHandler() = default;
 
-  virtual bool load(const MMContent& content, MMInputItem& input) override;
+  virtual bool load(const MMContent& content,
+                    MMInputItem& input,
+                    MMPayload& payload) override;
   virtual bool decode(MMInputItem& input) override;
 };
 

@@ -19,7 +19,9 @@ limitations under the License.
 
 namespace xllm {
 
-bool MMEmbeddingHandler::load(const MMContent& content, MMInputItem& input) {
+bool MMEmbeddingHandler::load(const MMContent& content,
+                              MMInputItem& input,
+                              MMPayload& payload) {
   if (!content.mm_embedding.defined()) return false;
   input.type_ = MMType::EMBEDDING;
   input.mm_embedding_ = content.mm_embedding;
