@@ -234,9 +234,7 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
     CHECK_LT(output_idx, num_seqs);
 
     if (raw_output.mm_embeddings.size() > 0) {  // mm embed task
-      const auto& n_images_opt = seq->get_mm_data().get<int64_t>("n_images");
-      int64_t n_images = 0;
-      if (n_images_opt) n_images = n_images_opt.value();
+      int64_t n_images = seq->get_mm_data().size();
       if (n_images > 0) {
         std::vector<torch::Tensor> seq_mm_embeddings;
         seq_mm_embeddings.reserve(n_images);
