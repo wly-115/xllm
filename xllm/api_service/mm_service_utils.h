@@ -53,20 +53,12 @@ bool build_messages(const google::protobuf::RepeatedPtrField<
         AudioURL audio_url;
         audio_url.url = std::move(*item.mutable_audio_url()->release_url());
         contents.emplace_back(item.type(), audio_url);
-
-      } else if (item.type() == "mm_embedding") {
-        auto* fp32_data = item.mutable_mm_embedding()
-                              ->mutable_contents()
-                              ->mutable_fp32_contents()
-                              ->mutable_data();
-        std::vector<int64_t> tensor_shape(
-            item.mutable_mm_embedding()->shape().begin(),
-            item.mutable_mm_embedding()->shape().end());
-        torch::Tensor mm_embedding =
-            torch::from_blob(fp32_data,
-                             tensor_shape,
-                             torch::TensorOptions().dtype(torch::kFloat32));
-        contents.emplace_back(item.type(), mm_embedding);
+      } else if (item.type() == "image_embedding") {
+        contents.emplace_back("image_embedding", item.image_embedding());
+      } else if (item.type() == "video_embedding") {
+        contents.emplace_back("video_embedding", item.video_embedding());
+      } else if (item.type() == "audio_embedding") {
+        contents.emplace_back("audio_embedding", item.audio_embedding());
       } else {
         call->finish_with_error(StatusCode::INVALID_ARGUMENT,
                                 "message content type is invalid.");

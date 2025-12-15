@@ -32,6 +32,9 @@ class TensorProtoBuilder {
   bool build_tensor(const torch::Tensor& in_tensor,
                     xllm::proto::Tensor& out_tensor,
                     std::string& binary_payload);
+  bool build_tensor(const xllm::proto::Tensor& in_tensor,
+                    const std::string& binary_payload,
+                    torch::Tensor& out_tensor);
 
  private:
   bool use_binary_encoding_;
@@ -44,12 +47,14 @@ class EmbeddingOutputBuilder {
   ~EmbeddingOutputBuilder();
   bool build_repeated_embedding_output(
       const std::vector<EmbeddingOutput>& in_outputs,
-      google::protobuf::RepeatedPtrField<xllm::proto::EmbeddingData>&
-          out_outputs,
+      google::protobuf::RepeatedPtrField<xllm::proto::Embedding>& out_outputs,
       std::string& binary_payload);
   bool build_embedding_output(const EmbeddingOutput& in_output,
-                              xllm::proto::EmbeddingData& out_output,
+                              xllm::proto::Embedding& out_output,
                               std::string& binary_payload);
+  bool build_embedding_output(const xllm::proto::Embedding& in_embedding_output,
+                              std::string& binary_payload,
+                              EmbeddingOutput& out_embedding_output);
   bool embedding_use_binary_encoding_;
   bool metadata_use_binary_encoding_;
 };

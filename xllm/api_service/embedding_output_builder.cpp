@@ -66,6 +66,51 @@ bool TensorProtoBuilder::build_tensor(const torch::Tensor& in_tensor,
   return true;
 }
 
+bool TensorProtoBuilder::build_tensor(const xllm::proto::Tensor& in_tensor,
+                                      const std::string& binary_payload,
+                                      torch::Tensor& out_tensor) {
+  const auto& params = in_tensor.parameters();
+  auto it = params.find("is_binary");
+  bool is_binary = (it != params.end() && it->second.bool_param());
+
+  if (!is_binary) {
+    out_tensor = util::proto_to_torch(in_tensor);
+    return true;
+  }
+
+  auto offset_it = params.find("offset");
+  auto len_it = params.find("len");
+
+  if (offset_it == params.end() || len_it == params.end()) {
+    return false;
+  }
+
+  const int64_t offset = offset_it->second.int64_param();
+  const int64_t byte_len = len_it->second.int64_param();
+
+  if (offset < 0 || byte_len <= 0 ||
+      static_cast<size_t>(offset + byte_len) > binary_payload.size()) {
+    return false;
+  }
+
+  auto dtype = util::datatype_proto_to_torch(in_tensor.datatype());
+
+  std::vector<int64_t> sizes;
+  sizes.reserve(in_tensor.shape_size());
+  for (auto dim : in_tensor.shape()) {
+    sizes.push_back(dim);
+  }
+
+  const char* src = binary_payload.data() + offset;
+
+  out_tensor = torch::from_blob(
+      const_cast<char*>(src), sizes, torch::TensorOptions().dtype(dtype));
+
+  out_tensor = out_tensor.clone();
+
+  return true;
+}
+
 EmbeddingOutputBuilder::EmbeddingOutputBuilder(
     bool embedding_use_binary_encoding,
     bool metadata_use_binary_encoding)
@@ -76,12 +121,11 @@ EmbeddingOutputBuilder::~EmbeddingOutputBuilder() {};
 
 bool EmbeddingOutputBuilder::build_repeated_embedding_output(
     const std::vector<EmbeddingOutput>& in_embedding_outputs,
-    google::protobuf::RepeatedPtrField<xllm::proto::EmbeddingData>&
+    google::protobuf::RepeatedPtrField<xllm::proto::Embedding>&
         out_embedding_outputs,
     std::string& binary_payload) {
   for (const auto& in_embedding_output : in_embedding_outputs) {
-    xllm::proto::EmbeddingData* out_embedding_output =
-        out_embedding_outputs.Add();
+    xllm::proto::Embedding* out_embedding_output = out_embedding_outputs.Add();
     if (!build_embedding_output(
             in_embedding_output, *out_embedding_output, binary_payload)) {
       return false;
@@ -92,7 +136,7 @@ bool EmbeddingOutputBuilder::build_repeated_embedding_output(
 
 bool EmbeddingOutputBuilder::build_embedding_output(
     const EmbeddingOutput& in_embedding_output,
-    xllm::proto::EmbeddingData& out_embedding_output,
+    xllm::proto::Embedding& out_embedding_output,
     std::string& binary_payload) {
   TensorProtoBuilder embedding_output_builder(embedding_use_binary_encoding_);
   embedding_output_builder.build_tensor(
@@ -111,4 +155,30 @@ bool EmbeddingOutputBuilder::build_embedding_output(
   return true;
 };
 
+bool EmbeddingOutputBuilder::build_embedding_output(
+    const xllm::proto::Embedding& in_embedding_output,
+    std::string& binary_payload,
+    EmbeddingOutput& out_embedding_output) {
+  TensorProtoBuilder embedding_tensor_builder(embedding_use_binary_encoding_);
+  if (!embedding_tensor_builder.build_tensor(in_embedding_output.embedding(),
+                                             binary_payload,
+                                             out_embedding_output.embedding)) {
+    return false;
+  }
+
+  out_embedding_output.metadata.clear();
+
+  for (const auto& [key, proto_tensor] : in_embedding_output.metadata()) {
+    torch::Tensor tensor;
+    TensorProtoBuilder meta_builder(metadata_use_binary_encoding_);
+
+    if (!meta_builder.build_tensor(proto_tensor, binary_payload, tensor)) {
+      return false;
+    }
+
+    out_embedding_output.metadata.emplace(key, std::move(tensor));
+  }
+
+  return true;
+}
 };  // namespace xllm

@@ -16,18 +16,22 @@ limitations under the License.
 #include <vector>
 
 #include "mm_handler.h"
+#include "mm_type.h"
 
 namespace xllm {
 
 class MMEmbeddingHandler : public MMHandlerBase {
  public:
-  MMEmbeddingHandler() = default;
+  MMEmbeddingHandler(MMType::Value mm_type);
   ~MMEmbeddingHandler() = default;
 
   virtual bool load(const MMContent& content,
                     MMInputItem& input,
                     MMPayload& payload) override;
   virtual bool decode(MMInputItem& input) override;
+
+ private:
+  MMType::Value mm_type_;
 };
 
 }  // namespace xllm
