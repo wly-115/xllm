@@ -20,6 +20,7 @@ limitations under the License.
 
 #include "core/common/message.h"
 #include "core/common/types.h"
+#include "core/framework/request/request.h"
 #include "mm_type.h"
 
 namespace xllm {
@@ -37,7 +38,8 @@ struct MMInputItem {
   torch::Tensor decode_data_;  // image: rgb, [c,h,w], uint8
 
   VideoMetadata video_meta_;
-  torch::Tensor mm_embedding_;
+
+  EmbeddingOutput embedding;
 };
 
 struct MMPayload {

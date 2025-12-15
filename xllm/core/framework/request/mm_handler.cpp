@@ -142,8 +142,13 @@ bool VideoHandler::decode(MMInputItem& input) {
 MMHandlerSet::MMHandlerSet() {
   handlers_["image_url"] = std::make_unique<ImageHandler>();
   handlers_["video_url"] = std::make_unique<VideoHandler>();
-  handlers_["mm_embedding"] = std::make_unique<MMEmbeddingHandler>();
   // handlers_["audio_url"] = std::make_unique<AudioHandler>();
+  handlers_["image_embedding"] =
+      std::make_unique<MMEmbeddingHandler>(MMType::IMAGE);
+  handlers_["video_embedding"] =
+      std::make_unique<MMEmbeddingHandler>(MMType::VIDEO);
+  handlers_["audio_embedding"] =
+      std::make_unique<MMEmbeddingHandler>(MMType::AUDIO);
 }
 
 MMHandlerSet::~MMHandlerSet() {}
