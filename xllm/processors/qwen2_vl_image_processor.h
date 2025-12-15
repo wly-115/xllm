@@ -35,6 +35,9 @@ class Qwen2VLImageProcessor : public ImageProcessor {
   bool process_image(torch::Tensor image,
                      torch::Tensor& pixel_values,
                      torch::Tensor& thw);
+  bool process_images_embedding(
+      const std::vector<EmbeddingOutput>& images_embedding,
+      MMData& mm_datas);
 
   bool process_videos(std::vector<torch::Tensor> videos,
                       std::vector<VideoMetadata> video_meta_list,

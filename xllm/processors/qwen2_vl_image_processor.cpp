@@ -157,29 +157,57 @@ Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
 }
 
 bool Qwen2VLImageProcessor::process(const MMInput& inputs, MMData& datas) {
-  std::vector<torch::Tensor> images = inputs.get_decode_data(MMType::IMAGE);
-  std::vector<torch::Tensor> videos = inputs.get_decode_data(MMType::VIDEO);
-  std::vector<VideoMetadata> video_meta_list = inputs.get_video_metadata();
-
-  if (images.empty() && (videos.empty() || video_meta_list.empty())) {
-    LOG(ERROR) << "no image/video tensor found.";
-    return false;
-  }
-
-  if (!images.empty()) {
-    if (!this->process_images(images, datas)) {
-      LOG(ERROR) << " process image failed.";
+  for (auto i = 0; i < inputs.size(); i++) {
+    std::vector<torch::Tensor> images =
+        inputs.get_decode_data(MMType::IMAGE, i, i + 1);
+    std::vector<EmbeddingOutput> images_embedding =
+        inputs.get_embedding(MMType::IMAGE, i, i + 1);
+    std::vector<torch::Tensor> videos =
+        inputs.get_decode_data(MMType::VIDEO, i, i + 1);
+    std::vector<VideoMetadata> video_meta_list =
+        inputs.get_video_metadata(i, i + 1);
+    if (images_embedding.empty() && images.empty() &&
+        (videos.empty() || video_meta_list.empty())) {
+      LOG(ERROR) << "no image/video tensor or embedding found.";
       return false;
     }
-  }
 
-  if (!videos.empty()) {
-    if (!this->process_videos(videos, video_meta_list, datas)) {
-      LOG(ERROR) << " process video failed.";
-      return false;
+    if (!images_embedding.empty()) {
+      if (!this->process_images_embedding(images_embedding, datas)) {
+        LOG(ERROR) << " process embedding failed.";
+        return false;
+      }
+    }
+
+    if (!images.empty()) {
+      if (!this->process_images(images, datas)) {
+        LOG(ERROR) << " process image failed.";
+        return false;
+      }
+    }
+
+    if (!videos.empty()) {
+      if (!this->process_videos(videos, video_meta_list, datas)) {
+        LOG(ERROR) << " process video failed.";
+        return false;
+      }
     }
   }
+  return true;
+}
 
+bool Qwen2VLImageProcessor::process_images_embedding(
+    const std::vector<EmbeddingOutput>& images_embedding,
+    MMData& mm_datas) {
+  for (auto& embedding : images_embedding) {
+    auto& item = mm_datas.add(MMType::IMAGE);
+    MMDict data;
+    data["embedding"] = embedding.embedding;
+    for (const auto& [key, value] : embedding.metadata) {
+      data[key] = value;
+    }
+    item.set_data(data);
+  }
   return true;
 }
 

@@ -252,7 +252,9 @@ torch::ScalarType datatype_proto_to_torch(const std::string& proto_datatype) {
        {"UINT64", torch::kInt64},
        {"FP32", torch::kFloat},
        {"FP64", torch::kDouble},
-       {"BYTES", torch::kByte}};
+       {"BYTES", torch::kByte},
+       {"FP16", torch::kHalf},
+       {"BF16", torch::kBFloat16}};
 
   auto iter = kDatatypeMap.find(proto_datatype);
   if (iter == kDatatypeMap.end()) {
