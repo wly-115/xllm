@@ -39,7 +39,7 @@ struct MMInputItem {
 
   VideoMetadata video_meta_;
 
-  EmbeddingOutput embedding;
+  EmbeddingOutput embedding_;
 };
 
 struct MMPayload {
@@ -73,31 +73,61 @@ struct MMInput {
 
   bool empty() const { return items_.empty(); }
   void clear() { items_.clear(); }
+  size_t size() const { return items_.size(); }
 
   void insert(const std::vector<MMInputItem>& items) {
     items_.insert(items_.end(), items.begin(), items.end());
   }
 
-  std::vector<torch::Tensor> get_decode_data(MMType type) const {
+  std::vector<torch::Tensor> get_decode_data(MMType type,
+                                             size_t start,
+                                             size_t end) const {
     std::vector<torch::Tensor> vec;
-
-    for (const auto& item : items_) {
-      if (item.type_ == type) {
+    for (auto i = start; i < end; i++) {
+      auto& item = items_[i];
+      if (item.type_ == type && item.decode_data_.defined()) {
         vec.emplace_back(item.decode_data_);
       }
     }
     return std::move(vec);
   }
 
-  std::vector<VideoMetadata> get_video_metadata() const {
+  std::vector<torch::Tensor> get_decode_data(MMType type) const {
+    return get_decode_data(type, 0, items_.size());
+  }
+
+  std::vector<VideoMetadata> get_video_metadata(size_t start,
+                                                size_t end) const {
     std::vector<VideoMetadata> metas;
     metas.reserve(items_.size());
-    for (auto& item : items_) {
+    for (auto i = start; i < end; i++) {
+      auto& item = items_[i];
       if (item.type_ == MMType::VIDEO) {
         metas.push_back(item.video_meta_);
       }
     }
     return metas;
+  }
+
+  std::vector<VideoMetadata> get_video_metadata() const {
+    return get_video_metadata(0, items_.size());
+  }
+
+  std::vector<EmbeddingOutput> get_embedding(MMType type,
+                                             size_t start,
+                                             size_t end) const {
+    std::vector<EmbeddingOutput> vec;
+    for (auto i = start; i < end; i++) {
+      auto& item = items_[i];
+      if (item.type_ == type && item.embedding_.embedding.defined()) {
+        vec.emplace_back(item.embedding_);
+      }
+    }
+    return std::move(vec);
+  }
+
+  std::vector<EmbeddingOutput> get_embedding(MMType type) const {
+    return get_embedding(type, 0, items_.size());
   }
 
   MMPayload payload_;
