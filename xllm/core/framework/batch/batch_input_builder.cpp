@@ -683,6 +683,7 @@ RawForwardInput BatchInputBuilder::state_to_raw_forward_input() {
     raw_forward_input.kv_cache_start_offsets =
         std::move(state_.kv_cache_start_offsets);
   }
+
   raw_forward_input.mm_data.batch(mm_data_vec_);
 
   process_swap_block_infos(raw_forward_input);
