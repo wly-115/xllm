@@ -130,7 +130,7 @@ bool MMData::foreach (MMDictItem::IVisitor& v) {
 }
 
 bool MMData::foreach (IItemVisitor& v) {
-  if (!valid()) return false;
+  // if (!valid()) return false;
 
   if (hold<MMItemVec>()) {
     auto& vec = items<MMItemVec>();

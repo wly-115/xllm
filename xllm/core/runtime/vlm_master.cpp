@@ -36,6 +36,7 @@ limitations under the License.
 #include "scheduler/scheduler_factory.h"
 #include "server/xllm_server_registry.h"
 #include "util/device_name_utils.h"
+#include "util/multimodal_util.h"
 #include "util/scope_guard.h"
 #include "util/timer.h"
 
@@ -124,7 +125,7 @@ VLMMaster::~VLMMaster() {
 }
 
 void VLMMaster::handle_request(const std::string& prompt,
-                               const MMData& mm_data,
+                               MMData& mm_data,
                                const RequestParams& sp,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
@@ -136,7 +137,7 @@ void VLMMaster::handle_request(const std::string& prompt,
 
   threadpool_->schedule([this,
                          prompt = std::move(prompt),
-                         mm_data = std::move(mm_data),
+                         &mm_data = mm_data,
                          sp = std::move(sp),
                          callback = std::move(cb)]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_completion);
@@ -150,8 +151,7 @@ void VLMMaster::handle_request(const std::string& prompt,
       return;
     }
 
-    auto request =
-        generate_request(std::move(prompt), std::move(mm_data), sp, callback);
+    auto request = generate_request(std::move(prompt), mm_data, sp, callback);
     if (!request) {
       return;
     }
@@ -164,7 +164,6 @@ void VLMMaster::handle_request(const std::string& prompt,
 }
 
 void VLMMaster::handle_request(const std::vector<Message>& messages,
-                               const MMData& mm_data,
                                const RequestParams& sp,
                                OutputCallback callback) {
   scheduler_->incr_pending_requests(1);
@@ -176,7 +175,6 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
 
   threadpool_->schedule([this,
                          messages = std::move(messages),
-                         mm_data = std::move(mm_data),
                          sp = std::move(sp),
                          callback = std::move(cb)]() mutable {
     AUTO_COUNTER(request_handling_latency_seconds_chat);
@@ -189,7 +187,7 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
       return;
     }
 
-    auto request = generate_request(messages, mm_data, sp, callback);
+    auto request = generate_request(messages, sp, callback);
     if (!request) {
       return;
     }
@@ -201,31 +199,8 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
   });
 }
 
-void VLMMaster::handle_request(const std::vector<Message>& messages,
-                               const RequestParams& sp,
-                               OutputCallback callback) {
-  static MMInputTransfer helper;
-  MMInput mm_inputs;
-  if (!helper.trans(messages, mm_inputs)) {
-    LOG(ERROR) << "mm input helper trans failed.";
-    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "MM input transfer trans failed.");
-    return;
-  }
-
-  MMData mm_data;
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << " image processor process failed.";
-    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "Image processor process failed.");
-    return;
-  }
-
-  this->handle_request(messages, mm_data, sp, callback);
-}
-
 void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
-                                     const std::vector<MMData>& mm_datas,
+                                     std::vector<MMData>& mm_datas,
                                      const std::vector<RequestParams>& sps,
                                      BatchOutputCallback callback) {
   CHECK(prompts.size() == sps.size() || sps.size() == 1)
@@ -234,7 +209,7 @@ void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
   const size_t num_requests = prompts.size();
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(prompts[i]),
-                   std::move(mm_datas[i]),
+                   mm_datas[i],
                    // the sampling parameter may be shared
                    sps.size() == 1 ? sps[0] : std::move(sps[i]),
                    [i, callback](const RequestOutput& output) {
@@ -246,7 +221,7 @@ void VLMMaster::handle_batch_request(const std::vector<std::string>& prompts,
 
 void VLMMaster::handle_batch_request(
     const std::vector<std::vector<Message>>& conversations,
-    const std::vector<MMData>& mm_datas,
+
     const std::vector<RequestParams>& sps,
     BatchOutputCallback callback) {
   CHECK(conversations.size() == sps.size() || sps.size() == 1)
@@ -255,7 +230,6 @@ void VLMMaster::handle_batch_request(
   const size_t num_requests = conversations.size();
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(conversations[i]),
-                   std::move(mm_datas[i]),
                    // the sampling parameter may be shared
                    sps.size() == 1 ? sps[0] : std::move(sps[i]),
                    [i, callback](const RequestOutput& output) {
@@ -298,7 +272,7 @@ void VLMMaster::generate() {
 }
 
 std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
-                                                     const MMData& mm_data,
+                                                     MMData& mm_data,
                                                      const RequestParams& sp,
                                                      OutputCallback callback) {
   if (prompt.empty()) {
@@ -315,6 +289,9 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
                         "Failed to encode prompt");
     return nullptr;
   }
+  input_processor_->post_process(prompt_tokens, mm_data);
+  LOG(INFO) << mm_data.items<MMItemVec>()[0].get_mm_position().length;
+  ;
 
   COUNTER_ADD(tokenization_latency_seconds, timer.elapsed_seconds());
 
@@ -418,10 +395,25 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
 
 std::shared_ptr<Request> VLMMaster::generate_request(
     const std::vector<Message>& messages,
-    const MMData& mm_data,
     const RequestParams& sp,
     OutputCallback callback) {
   Timer timer;
+  static MMInputTransfer helper;
+  MMInput mm_inputs;
+  if (!helper.trans(messages, mm_inputs)) {
+    LOG(ERROR) << "mm input helper trans failed.";
+    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
+                        "MM input transfer trans failed.");
+    return nullptr;
+  }
+
+  MMData mm_data;
+  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
+    LOG(ERROR) << " image processor process failed.";
+    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
+                        "Image processor process failed.");
+    return nullptr;
+  }
 
   auto prompt = chat_template_->apply(messages);
   if (!prompt.has_value()) {
@@ -432,8 +424,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(
   }
   COUNTER_ADD(chat_template_latency_seconds, timer.elapsed_seconds());
 
-  return generate_request(
-      std::move(prompt.value()), std::move(mm_data), sp, callback);
+  return generate_request(std::move(prompt.value()), mm_data, sp, callback);
 }
 
 }  // namespace xllm

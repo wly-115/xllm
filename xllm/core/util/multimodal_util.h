@@ -17,19 +17,19 @@ limitations under the License.
 
 #include <torch/torch.h>
 
-#include <string>
+#include <vector>
 
-#include "core/framework/request/mm_batch_data.h"
-#include "core/framework/request/mm_data.h"
+#include "core/util/slice.h"
 
 namespace xllm {
+class MMData;
+class MMBatchData;
+class MMInput;
 
-class InputProcessor {
- public:
-  virtual ~InputProcessor() = default;
+void update_multimodal_embeddings(
+    std::vector<MMData>& mm_datas,
+    const MMBatchData& batch_mm_data,
+    std::vector<torch::Tensor>& multimodal_embeddings);
 
-  virtual void process(std::string& prompt, const MMData& mm_data) = 0;
-  virtual void post_process(const std::vector<int>& prompt, MMData& mm_data) {};
-};
-
+torch::Tensor gather_multimodal_embeddings(std::vector<MMData>& mm_datas);
 }  // namespace xllm

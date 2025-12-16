@@ -44,6 +44,7 @@ class MMBatchData {
   void get(const MMKey& key, std::vector<torch::Tensor>& vec) const;
 
   MMBatchData to(const torch::Device& device) const;
+
   void batch(const std::vector<MMData>& mm_datas);
 
   template <typename T>
@@ -55,6 +56,10 @@ class MMBatchData {
       return std::get<T>(itor->second);
     else
       return std::nullopt;
+  }
+  std::vector<MMData>& get_mm_datas() { return mm_datas_; }
+  void set_mm_datas(const std::vector<MMData>& mm_datas) {
+    mm_datas_ = std::move(mm_datas);
   }
 
   bool foreach (MMData::IVisitor& v) {

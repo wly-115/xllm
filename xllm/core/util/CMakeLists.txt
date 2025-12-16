@@ -13,6 +13,7 @@ cc_library(
     double_buffer.h
     env_var.h
     hash_util.h
+    multimodal_util.h
     http_downloader.h
     json_reader.h
     lightweightsemaphore.h
@@ -34,7 +35,7 @@ cc_library(
     env_var.cpp
     http_downloader.cpp
     # TODO. add following at next pr.
-    # hash_util.cpp
+    multimodal_util.cpp
     json_reader.cpp
     net.cpp
     pretty_print.cpp

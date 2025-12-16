@@ -35,7 +35,7 @@ class IVisitor {
   virtual bool visit(const MMKey& key, MMValue& value) = 0;
 };
 }  // namespace MMDictItem
-
+using MMItemVec = std::vector<MMDataItem>;
 class MMData {
  public:
   class IItemVisitor : public MMDataItem::IVisitor,
@@ -53,13 +53,13 @@ class MMData {
     virtual bool visit(MMData& data) = 0;
   };
 
-  using MMItemVec = std::vector<MMDataItem>;
   using MMItems = std::variant<MMItemVec, MMDict>;
 
  public:
   MMData() = default;
   MMData(uint32_t ty, const MMItemVec& items);
   MMData(uint32_t ty, const MMDict& items);
+  MMData(const MMItemVec& items) : MMData(MMType::IMAGE, items) {}
 
   bool has(uint32_t type) const { return type & ty_ != 0; }
   bool has(MMType type) const { return type & ty_ != 0; }
@@ -120,6 +120,8 @@ class MMData {
   T& items() {
     return std::get<T>(items_);
   }
+
+  const MMItems& items() const { return items_; }
 
   template <typename T>
   bool hold() const {

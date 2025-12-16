@@ -32,6 +32,12 @@ namespace xllm {
 class CausalVLM : public CausalLM {
  public:
   ~CausalVLM() override = default;
+  virtual std::vector<torch::Tensor> execute_encoder(
+      const torch::Tensor& tokens,
+      const ModelInputParams& parameters) = 0;
+  virtual torch::Tensor merge_multimodal_embeddings(
+      torch::Tensor input_ids,
+      const torch::Tensor& visual_features) = 0;
 };
 
 template <typename Model>
@@ -40,6 +46,17 @@ class CausalVLMImpl : public CausalVLM {
   CausalVLMImpl(Model model, const torch::TensorOptions& options)
       : model_(std::move(model)), options_(options) {}
 
+  std::vector<torch::Tensor> execute_encoder(
+      const torch::Tensor& tokens,
+      const ModelInputParams& parameters) override {
+    return model_->get_input_embeddings(tokens, parameters);
+  }
+
+  torch::Tensor merge_multimodal_embeddings(
+      torch::Tensor input_ids,
+      const torch::Tensor& visual_features) override {
+    return model_->merge_multimodal_embeddings(input_ids, visual_features);
+  }
   torch::Tensor forward(const torch::Tensor& tokens,
                         const torch::Tensor& positions,
                         std::vector<KVCache>& kv_caches,

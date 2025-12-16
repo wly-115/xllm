@@ -72,12 +72,13 @@ MMBatchData MMBatchData::to(const torch::Device& device) const {
     }
   }
 
-  return MMBatchData(ty_, dict);
+  auto mm_batch_data = MMBatchData(ty_, dict);
+  mm_batch_data.set_mm_datas(mm_datas_);
+  return mm_batch_data;
 }
 
 void MMBatchData::batch(const std::vector<MMData>& mm_datas) {
   mm_datas_ = std::move(mm_datas);
-
   CollectMMDataTensorVisitor visitor;
   this->foreach (static_cast<MMData::IVisitor&>(visitor));
 

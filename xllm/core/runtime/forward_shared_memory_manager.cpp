@@ -111,11 +111,10 @@ INLINE size_t get_eplb_info_size(const EplbInfo& info) {
          type_size<int32_t>;  // update_layer_id
 }
 
-INLINE size_t get_mm_batch_data_size(const MMBatchData& mm_data) {
+INLINE size_t get_mm_dict_size(const MMDict& mm_dict) {
   size_t total = 0;
-  auto& data = mm_data.data();
-  total += type_size<size_t> + type_size<uint32_t>;  // mm_dict size + mm_type
-  for (auto& [mm_key, mm_value] : data) {
+  total += type_size<size_t>;  // mm_dict size
+  for (auto& [mm_key, mm_value] : mm_dict) {
     total += get_string_size(mm_key);
     total += type_size<int32_t>;  // num of tensors
     if (std::holds_alternative<torch::Tensor>(mm_value)) {
@@ -126,6 +125,42 @@ INLINE size_t get_mm_batch_data_size(const MMBatchData& mm_data) {
         total += get_tensor_size(tensor);
       }
     }
+  }
+  return total;
+}
+
+INLINE size_t get_mm_item_size(const MMDataItem& mm_item) {
+  size_t total = 0;
+  total += type_size<int32_t> * 3;  // cache_tokens_num & mm_position
+  total += type_size<uint32_t>;     // mm_type
+  // total += get_mm_metadata_size(mm_item.get_metadata());  // metadata
+  total += MURMUR_HASH3_VALUE_LEN;  // mm_hash_value
+  total += get_mm_dict_size(mm_item.data());
+  return total;
+}
+
+INLINE size_t get_mm_data_size(const MMData& mm_data) {
+  size_t total = 0;
+  const auto& items = mm_data.items();
+  if (std::holds_alternative<MMItemVec>(items)) {
+    total += type_size<size_t>;  // num of mm_items
+    const auto& mm_items = std::get<MMItemVec>(items);
+    for (const auto& mm_item : mm_items) {
+      total += get_mm_item_size(mm_item);
+    }
+  } else if (std::holds_alternative<MMDict>(items)) {
+    total += type_size<uint32_t>;  //  mm_type
+    total += get_mm_dict_size(std::get<MMDict>(items));
+  }
+  return total;
+}
+
+INLINE size_t get_mm_data_vec_size(const std::vector<MMData>& mm_datas) {
+  size_t total = 0;
+  total += type_size<size_t>;  // num of mm_datas
+  total += type_size<bool>;    // is_mm_item
+  for (const auto& mm_data : mm_datas) {
+    total += get_mm_data_size(mm_data);
   }
   return total;
 }
@@ -175,7 +210,7 @@ INLINE size_t calculate_raw_forward_input_size(const RawForwardInput& input) {
            + get_eplb_info_size(input.eplb_info);
   // m_position
   total += get_2d_vector_size(input.m_positions_vec);
-  total += get_mm_batch_data_size(input.mm_data);
+  total += get_mm_data_vec_size(input.mm_data_vec);
 
   return total;
 }
@@ -317,19 +352,14 @@ INLINE void write_swap_blocks(char*& buffer,
   }
 }
 
-INLINE void write_mm_batch_data(char*& buffer, const MMBatchData& mm_data) {
-  auto& mm_dict = mm_data.data();
+INLINE void write_mm_dict(char*& buffer, const MMDict& mm_dict) {
   // size
   size_t size = mm_dict.size();
   write_data(buffer, (size_t)size);
-  // mm_type
-  uint32_t mm_type = mm_data.type();
-  write_data(buffer, mm_type);
   // tensor num
   int32_t tensor_num = 1;
   for (auto& [mm_key, mm_value] : mm_dict) {
     write_string(buffer, mm_key);
-
     if (std::holds_alternative<torch::Tensor>(mm_value)) {
       tensor_num = 1;
       write_data(buffer, tensor_num);
@@ -343,6 +373,45 @@ INLINE void write_mm_batch_data(char*& buffer, const MMBatchData& mm_data) {
         write_tensor(buffer, tensor);
       }
     }
+  }
+}
+
+INLINE void write_mm_item(char*& buffer, const MMDataItem& mm_item) {
+  write_data(buffer, mm_item.type());
+  write_data(buffer, mm_item.get_cached_tokens_num());
+  write_data(buffer, mm_item.get_mm_position());
+  const uint8_t* mm_hash_value = mm_item.get_immutable_hash_value();
+  memcpy(buffer, mm_hash_value, MURMUR_HASH3_VALUE_LEN);
+  buffer += MURMUR_HASH3_VALUE_LEN;
+  write_mm_dict(buffer, mm_item.data());
+}
+
+INLINE void write_mm_data_items(char*& buffer, const MMData& mm_data) {
+  const auto& mm_items = mm_data.items<MMItemVec>();
+  write_data(buffer, mm_items.size());
+  for (const auto& mm_item : mm_items) {
+    write_mm_item(buffer, mm_item);
+  }
+}
+
+INLINE void write_mm_data_dict(char*& buffer, const MMData& mm_data) {
+  const auto& mm_dict = mm_data.items<MMDict>();
+  write_data(buffer, mm_data.type());
+  write_mm_dict(buffer, mm_dict);
+}
+
+INLINE void write_mm_data_vec(char*& buffer,
+                              const std::vector<MMData>& mm_datas) {
+  write_data(buffer, mm_datas.size());
+
+  bool is_mm_item = mm_datas.size()
+                        ? std::holds_alternative<MMItemVec>(mm_datas[0].items())
+                        : true;
+  write_data(buffer, is_mm_item);
+  std::function<void(char*&, const MMData&)> write_mm_data =
+      is_mm_item ? write_mm_data_items : write_mm_data_dict;
+  for (const auto& mm_data : mm_datas) {
+    write_mm_data(buffer, mm_data);
   }
 }
 
@@ -496,14 +565,10 @@ INLINE void read_swap_blocks(const char*& buffer,
   }
 }
 
-INLINE void read_mm_batch_data(const char*& buffer, MMBatchData& mm_data) {
+INLINE void read_mm_dict(const char*& buffer, MMDict& mm_dict) {
   size_t size;
   read_data(buffer, size);
-  uint32_t mm_type;
-  read_data(buffer, mm_type);
   int32_t tensor_num;
-
-  MMDict mm_dict;
   while (size--) {
     std::string mm_key;
     read_string(buffer, mm_key);
@@ -520,7 +585,69 @@ INLINE void read_mm_batch_data(const char*& buffer, MMBatchData& mm_data) {
       mm_dict[mm_key] = tensor_vec;
     }
   }
-  mm_data = std::move(MMBatchData(mm_type, mm_dict));
+}
+
+INLINE void read_mm_position(const char*& buffer, MMPosition& mm_position) {
+  read_data(buffer, mm_position.offset);
+  read_data(buffer, mm_position.length);
+}
+
+INLINE void read_mm_item(const char*& buffer, MMDataItem& mm_item) {
+  uint32_t mm_type;
+  read_data(buffer, mm_type);
+  int32_t cached_tokens_num;
+  read_data(buffer, cached_tokens_num);
+  MMPosition mm_position;
+  read_mm_position(buffer, mm_position);
+  uint8_t mm_hash_value[MURMUR_HASH3_VALUE_LEN];
+  std::memcpy(mm_hash_value, buffer, MURMUR_HASH3_VALUE_LEN);
+  buffer += MURMUR_HASH3_VALUE_LEN;
+  MMDict mm_dict;
+  read_mm_dict(buffer, mm_dict);
+  MMType ty{static_cast<MMType::Value>(mm_type)};
+  MMDataItem tmp_mm_item = MMDataItem(ty, mm_dict);
+  tmp_mm_item.set_cached_tokens_num(cached_tokens_num);
+  tmp_mm_item.set_mm_position(mm_position);
+  tmp_mm_item.set_mm_hash_value(mm_hash_value);
+  mm_item = std::move(tmp_mm_item);
+}
+
+INLINE void read_mm_data_dict(const char*& buffer, MMData& mm_data) {
+  uint32_t mm_type;
+  read_data(buffer, mm_type);
+  MMDict mm_dict;
+  read_mm_dict(buffer, mm_dict);
+  MMType ty{static_cast<MMType::Value>(mm_type)};
+  mm_data = MMData(ty, mm_dict);
+}
+
+INLINE void read_mm_data_items(const char*& buffer, MMData& mm_data) {
+  size_t mm_items_num;
+  read_data(buffer, mm_items_num);
+  MMItemVec mm_items;
+  mm_items.reserve(mm_items_num);
+  for (size_t idx = 0; idx < mm_items_num; ++idx) {
+    MMDataItem mm_item;
+    read_mm_item(buffer, mm_item);
+    mm_items.push_back(std::move(mm_item));
+  }
+  mm_data = MMData(std::move(mm_items));
+}
+
+INLINE void read_mm_data_vec(const char*& buffer,
+                             std::vector<MMData>& mm_datas) {
+  size_t mm_data_num;
+  read_data(buffer, mm_data_num);
+  bool is_mm_item;
+  read_data(buffer, is_mm_item);
+  mm_datas.reserve(mm_data_num);
+  MMData mm_data;
+  std::function<void(const char*&, MMData&)> read_mm_data =
+      is_mm_item ? read_mm_data_items : read_mm_data_dict;
+  for (size_t i = 0; i < mm_data_num; ++i) {
+    read_mm_data(buffer, mm_data);
+    mm_datas.push_back(std::move(mm_data));
+  }
 }
 
 INLINE void deserialize_raw_forward_input(
@@ -580,7 +707,7 @@ INLINE void deserialize_raw_forward_input(
   read_data(buffer, input.num_sequences);
   read_eplb_info(buffer, input.eplb_info);
   read_2d_vector(buffer, input.m_positions_vec);
-  read_mm_batch_data(buffer, input.mm_data);
+  read_mm_data_vec(buffer, input.mm_data_vec);
 }
 
 INLINE void serialize_raw_forward_input(const RawForwardInput& input,
@@ -632,7 +759,7 @@ INLINE void serialize_raw_forward_input(const RawForwardInput& input,
   write_data(buffer, input.num_sequences);
   write_eplb_info(buffer, input.eplb_info);
   write_2d_vector(buffer, input.m_positions_vec);
-  write_mm_batch_data(buffer, input.mm_data);
+  write_mm_data_vec(buffer, input.mm_data_vec);
 }
 
 size_t calculate_raw_token_size(const RawToken& token) {
@@ -860,7 +987,8 @@ void convert_raw_forward_input_to_forward_input(RawForwardInput& raw_input,
   input_params.kv_cache_start_offsets = torch::tensor(
       std::move(raw_input.kv_cache_start_offsets), tensor_options);
 
-  input_params.mm_data = std::move(raw_input.mm_data);
+  input_params.mm_data.batch(raw_input.mm_data_vec);
+
   if (!raw_input.selected_token_idxes.empty()) {
     util::pad_2d_vector<int64_t>(raw_input.unique_token_ids_vec, 0);
     util::pad_2d_vector(raw_input.unique_token_counts_vec, 0);

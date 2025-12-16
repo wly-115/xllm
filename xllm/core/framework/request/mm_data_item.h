@@ -24,12 +24,18 @@ limitations under the License.
 #include <vector>
 
 #include "mm_type.h"
+#include "util/hash_util.h"
 
 namespace xllm {
 
 using MMKey = std::string;
 using MMValue = std::variant<torch::Tensor, std::vector<torch::Tensor>>;
 using MMDict = std::unordered_map<MMKey, MMValue>;
+
+struct MMPosition {
+  int32_t offset;
+  int32_t length;
+};
 
 class MMDataItem {
   using MMMetadata = std::variant<ImageMetadata, VideoMetadata, AudioMetadata>;
@@ -42,6 +48,7 @@ class MMDataItem {
   };
 
  public:
+  MMDataItem() = default;
   MMDataItem(MMType ty);
   MMDataItem(MMType ty, const MMDict& data);
   MMDataItem(MMType ty, const MMDict& data, const MMMetadata& metadata);
@@ -67,6 +74,17 @@ class MMDataItem {
   }
 
   template <typename T>
+  void update(const MMKey& key, const T& value) {
+    const auto& itor = data_.find(key);
+    if (itor != data_.end()) {
+      // Key exists, update it
+      data_[key] = value;
+    } else {
+      data_.insert({key, value});
+    }
+  }
+
+  template <typename T>
   std::optional<T> get_metadata() const {
     if (!valid()) return std::nullopt;
 
@@ -76,19 +94,39 @@ class MMDataItem {
       return std::nullopt;
     }
   }
+  const MMMetadata& get_metadata() const { return metadata_; }
 
   template <typename T>
   void set_metadata(const T& meta) {
     metadata_ = meta;
+  }
+  const MMPosition& get_mm_position() const { return mm_position_; }
+  void set_mm_position(const MMPosition& mm_position) {
+    mm_position_ = mm_position;
+  }
+
+  int32_t get_cached_tokens_num() const { return cached_tokens_num_; }
+
+  void set_cached_tokens_num(int cached_tokens_num) {
+    cached_tokens_num_ = cached_tokens_num;
+  }
+
+  const uint8_t* get_immutable_hash_value() const { return hash_value_; }
+  uint8_t* get_mutable_hash_value() { return hash_value_; }
+
+  void set_mm_hash_value(const uint8_t* hash_value) {
+    memcpy(hash_value_, hash_value, MURMUR_HASH3_VALUE_LEN);
   }
 
   void debug_print() const;
 
  private:
   MMType ty_ = MMType::NONE;
-  MMDict data_;
-
+  int32_t cached_tokens_num_ = 0;
+  uint8_t hash_value_[MURMUR_HASH3_VALUE_LEN];
+  MMPosition mm_position_;
   MMMetadata metadata_;
+  MMDict data_;
 };
 
 }  // namespace xllm
