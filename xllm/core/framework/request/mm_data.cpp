@@ -78,7 +78,6 @@ MMDataItem& MMData::add(MMType type) {
   return vec.back();
 }
 
-
 void MMData::get(uint32_t type, MMItemVec& vec) const {
   if (!valid()) return;
 

@@ -37,6 +37,8 @@ class IVisitor {
 };
 }  // namespace MMDictItem
 
+using MMItemVec = std::vector<MMDataItem>;
+
 class MMData {
  public:
   class IItemVisitor : public MMDataItem::IVisitor,
@@ -54,7 +56,6 @@ class MMData {
     virtual bool visit(MMData& data) = 0;
   };
 
-  using MMItemVec = std::vector<MMDataItem>;
   using MMItems = std::variant<MMItemVec, MMDict>;
 
  public:
@@ -90,10 +91,6 @@ class MMData {
     dict.insert({key, value});
     return true;
   }
-
-
-  void get(uint32_t type, std::vector<MMDataItem>& items) const;
-  void get(const MMKey& key, std::vector<torch::Tensor>& items) const;
 
   template <typename T>
   std::optional<T> get(const MMKey& key) const {
@@ -136,7 +133,6 @@ class MMData {
   }
 
   template <typename T>
-
   void set(uint32_t type, const T& item) {
     ty_ = type;
     items_ = item;
