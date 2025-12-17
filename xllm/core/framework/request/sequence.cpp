@@ -28,6 +28,7 @@ limitations under the License.
 #include <vector>
 
 #include "core/common/metrics.h"
+#include "core/framework/request/mm_data_visitor.h"
 #include "core/framework/tokenizer/tokenizer.h"
 #include "core/util/slice.h"
 #include "core/util/tensor_helper.h"
@@ -331,11 +332,16 @@ SequenceOutput Sequence::generate_output(const Tokenizer& tokenizer) {
     output.index = index_;
     std::vector<EmbeddingOutput> embedding_outputs;
     embedding_outputs.reserve(output_mm_embeddings_.size());
-    for (const auto& output_mm_embedding : output_mm_embeddings_) {
+    std::unordered_map<MMKey, std::vector<torch::Tensor>> metadata;
+    CollectItemTensorVisitor visitor(metadata, {"pixel_values"});
+    mm_data_.foreach (visitor);
+    for (int i = 0; i < output_mm_embeddings_.size(); i++) {
+      const auto& output_mm_embedding = output_mm_embeddings_[i];
       EmbeddingOutput embedding_output;
       embedding_output.embedding = output_mm_embedding;
-      embedding_output.metadata["image_grid_thw"] =
-          mm_data_.get<torch::Tensor>("image_grid_thw").value();
+      for (const auto& [key, value] : metadata) {
+        embedding_output.metadata[key] = value[i];
+      }
       embedding_outputs.push_back(embedding_output);
     };
     output.mm_embeddings = embedding_outputs;
