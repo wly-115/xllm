@@ -157,15 +157,25 @@ Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
 }
 
 bool Qwen2VLImageProcessor::process(const MMInput& inputs, MMData& datas) {
-  for (auto i = 0; i < inputs.size(); i++) {
-    std::vector<torch::Tensor> images =
-        inputs.get_decode_data(MMType::IMAGE, i, i + 1);
-    std::vector<EmbeddingOutput> images_embedding =
-        inputs.get_embedding(MMType::IMAGE, i, i + 1);
-    std::vector<torch::Tensor> videos =
-        inputs.get_decode_data(MMType::VIDEO, i, i + 1);
-    std::vector<VideoMetadata> video_meta_list =
-        inputs.get_video_metadata(i, i + 1);
+  for (auto& input_item : inputs) {
+    std::vector<torch::Tensor> images;
+    std::vector<EmbeddingOutput> images_embedding;
+    std::vector<torch::Tensor> videos;
+    std::vector<VideoMetadata> video_meta_list;
+
+    if (input_item.type_ == MMType::IMAGE) {
+      if (input_item.decode_data_.defined()) {
+        images.push_back(input_item.decode_data_);
+      } else if (input_item.embedding_.embedding.defined()) {
+        images_embedding.push_back(input_item.embedding_);
+      }
+    } else if (input_item.type_ == MMType::VIDEO) {
+      if (input_item.decode_data_.defined()) {
+        videos.push_back(input_item.decode_data_);
+      }
+      video_meta_list.push_back(input_item.video_meta_);
+    }
+
     if (images_embedding.empty() && images.empty() &&
         (videos.empty() || video_meta_list.empty())) {
       LOG(ERROR) << "no image/video tensor or embedding found.";
