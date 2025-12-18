@@ -38,8 +38,13 @@ class NonStreamCall : public Call {
   NonStreamCall(brpc::Controller* controller,
                 ::google::protobuf::Closure* done,
                 Request* request,
-                Response* response)
-      : Call(controller), done_(done), request_(request), response_(response) {
+                Response* response,
+                bool use_arena = true)
+      : Call(controller),
+        done_(done),
+        request_(request),
+        response_(response),
+        use_arena_(use_arena) {
     controller_->http_response().SetHeader("Content-Type",
                                            "text/javascript; charset=utf-8");
 
@@ -48,7 +53,14 @@ class NonStreamCall : public Call {
     json_options_.always_print_primitive_fields = true;
   }
 
-  ~NonStreamCall() override { done_->Run(); }
+  ~NonStreamCall() override {
+    done_->Run();
+
+    if (!use_arena_) {
+      delete request_;
+      delete response_;
+    }
+  }
 
   void set_bytes_to_base64(bool bytes_to_base64) {
     json_options_.bytes_to_base64 = bytes_to_base64;
@@ -106,6 +118,8 @@ class NonStreamCall : public Call {
 
   Request* request_;
   Response* response_;
+
+  bool use_arena_ = true;
 
   json2pb::Pb2JsonOptions json_options_;
 };
