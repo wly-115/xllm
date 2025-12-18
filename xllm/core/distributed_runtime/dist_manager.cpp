@@ -113,7 +113,7 @@ void DistManager::setup_multi_node_workers(
   WorkerType worker_type("LLM");
   const auto& model_backend = options.backend();
   if (model_backend == "llm") {
-    if (options.task_type() == "gnerate") {
+    if (options.task_type() == "generate") {
       worker_type = WorkerType::LLM;
     } else if (options.task_type() == "embed") {
       worker_type = WorkerType::ELM;
