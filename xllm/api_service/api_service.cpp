@@ -280,7 +280,7 @@ void handle_embedding_request(std::unique_ptr<Service>& embedding_service_impl_,
   }
 
   std::shared_ptr<Call> call = std::make_shared<EmbeddingCall>(
-      ctrl, done_guard.release(), req_pb, resp_pb);
+      ctrl, done_guard.release(), req_pb, resp_pb, arena != nullptr);
   embedding_service_impl_->process_async(call);
 }
 }  // namespace
