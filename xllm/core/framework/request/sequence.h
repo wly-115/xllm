@@ -94,6 +94,7 @@ class Sequence final {
 
   // get mm data
   const MMData& get_mm_data() const { return mm_data_; }
+  MMData& get_mutable_mm_data() { return mm_data_; }
   void set_mrope_position_delta(int val) { mrope_position_delta_ = val; }
   int get_mrope_position_delta() { return mrope_position_delta_; }
 

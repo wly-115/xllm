@@ -25,13 +25,13 @@ BlockManagerPool::BlockManagerPool(const Options& options, int32_t dp_size)
   CHECK(dp_size > 0) << "dp_size must be greater than 0";
   block_managers_.reserve(dp_size);
   host_block_managers_.reserve(dp_size);
-
   BlockManager::Options npu_options;
   npu_options.num_blocks(options_.num_blocks())
       .block_size(options_.block_size())
       .enable_prefix_cache(options_.enable_prefix_cache())
       .enable_disagg_pd(options_.enable_disagg_pd())
-      .enable_cache_upload(options_.enable_cache_upload());
+      .enable_cache_upload(options_.enable_cache_upload())
+      .enable_mm_prefix_cache(options_.enable_mm_prefix_cache());
 
   BlockManager::Options host_options = npu_options;
   host_options.num_blocks(options_.host_num_blocks())
@@ -331,8 +331,8 @@ void BlockManagerPool::allocate_shared(Sequence* sequence) {
     // If the sequence holds shared_blocks, the hash values of these blocks do
     // not need to be recalculated and can be reused directly.
     std::vector<Block> shared_blocks =
-        block_managers_[dp_rank]->allocate_shared(sequence->tokens(),
-                                                  existed_shared_blocks);
+        block_managers_[dp_rank]->allocate_shared(
+            sequence, sequence->tokens(), existed_shared_blocks);
     sequence->add_shared_kv_blocks(std::move(shared_blocks));
   }
 }
@@ -341,7 +341,7 @@ void BlockManagerPool::cache(Sequence* sequence) {
   int32_t dp_rank = get_dp_rank(sequence);
   const auto token_ids = sequence->cached_tokens();
   auto* blocks = sequence->kv_state().mutable_kv_blocks();
-  block_managers_[dp_rank]->cache(token_ids, *blocks);
+  block_managers_[dp_rank]->cache(sequence, token_ids, *blocks);
 }
 
 void BlockManagerPool::allocate_host_shared(Sequence* sequence) {
@@ -354,7 +354,8 @@ void BlockManagerPool::allocate_host_shared(Sequence* sequence) {
   if (options_.enable_prefix_cache()) {
     int32_t dp_rank = get_dp_rank(sequence);
     std::vector<Block> shared_blocks =
-        host_block_managers_[dp_rank]->allocate_shared(sequence->tokens());
+        host_block_managers_[dp_rank]->allocate_shared(sequence,
+                                                       sequence->tokens());
     sequence->add_shared_host_kv_blocks(std::move(shared_blocks));
   }
 }
@@ -375,7 +376,8 @@ void BlockManagerPool::save_offload_blocks(Sequence* sequence) {
   int32_t dp_rank = get_dp_rank(sequence);
 
   if (host_blocks->size() > 0) {
-    host_block_managers_[dp_rank]->cache(sequence->tokens(), *host_blocks);
+    host_block_managers_[dp_rank]->cache(
+        sequence, sequence->tokens(), *host_blocks);
   }
 
   size_t needed_block_num =
