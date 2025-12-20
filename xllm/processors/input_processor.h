@@ -30,8 +30,12 @@ class InputProcessor {
   virtual ~InputProcessor() = default;
 
   virtual void process(std::string& prompt, const MMData& mm_data) = 0;
+<<<<<<< HEAD
   virtual void find_mm_spans(const std::vector<int>& prompt, MMData& mm_data) {
   };
+=======
+  virtual void post_process(const std::vector<int>& prompt, MMData& mm_data) {};
+>>>>>>> 8e905af (feat: support prefix cache for multi-modal.)
   void hash_mm_items(MMInput& mm_input, MMData& mm_data) {
     std::vector<Murmur3Key> mm_hashes;
     const auto& mm_input_items = mm_input.items_;

@@ -26,6 +26,7 @@ limitations under the License.
 
 #include "common/global_flags.h"
 #include "common/metrics.h"
+#include "request/mm_data_visitor.h"
 #include "request/sequence.h"
 
 namespace xllm {
@@ -93,7 +94,7 @@ std::vector<Block> MMPrefixCache::match(
           ? Murmur3Key{}
           : Murmur3Key{existed_shared_blocks.back().get_immutable_hash_value()};
 
-  MMData& mm_data = sequence->get_mutable_mm_data();
+  MMData& mm_data = sequence->mutable_mm_data();
 
   int32_t cur_mm_idx = 0;
   int32_t mm_num = mm_data.size();
@@ -137,20 +138,16 @@ std::vector<Block> MMPrefixCache::match(
     }
   }
 
-  for (int idx = 0; idx < cur_mm_idx; ++idx) {
-    auto& mm_item_state = mm_items[idx].mutable_state();
-    auto& pos = mm_item_state.mutable_token_pos();
-    auto& prefix_cache = mm_item_state.mutable_prefix_cache();
-    prefix_cache.cached_token_num = pos.length;
+  uint32_t last_matched_token_index = 0;
+  if (cur_token_index > n_tokens) {
+    cur_token_index = cur_token_index - block_size_ + 1;
   }
-  auto& cur_mm_state = mm_items[cur_mm_idx].mutable_state();
-  const auto& cur_mm_pos = cur_mm_state.token_pos();
-  auto& cur_prefix_cache = cur_mm_state.mutable_prefix_cache();
-  auto last_matched_token_index = cur_token_index - 1;
-  if (last_matched_token_index >= cur_mm_pos.offset &&
-      last_matched_token_index < cur_mm_pos.offset + cur_mm_pos.length) {
-    cur_prefix_cache.cached_token_num = cur_token_index - cur_mm_pos.offset;
-  }
+  last_matched_token_index =
+      cur_token_index ? cur_token_index - 1 : last_matched_token_index;
+
+  UpdateMMItemCachedStateVisitor visitor(
+      last_matched_token_index, token_ids.size(), block_size_);
+  mm_data.foreach (visitor);
 
   // update LRU list
   while (!node_list.is_empty()) {
@@ -162,9 +159,6 @@ std::vector<Block> MMPrefixCache::match(
 
   int64_t int_rate_percent = static_cast<int64_t>(
       static_cast<double>(blocks.size()) * 100.0 / n_blocks);
-  LOG(INFO) << "PrefixCache Match Rate: " << int_rate_percent
-            << "%, Matched Blocks: " << blocks.size()
-            << ", Total Blocks: " << n_blocks;
   HISTOGRAM_OBSERVE(prefix_cache_block_matched_rate, int_rate_percent);
   HISTOGRAM_OBSERVE(prefix_cache_block_matched_num, blocks.size());
 
@@ -192,7 +186,11 @@ size_t MMPrefixCache::insert(Sequence* sequence,
   int32_t cur_mm_idx = 0;
   uint32_t block_idx = 0;
   insert_keys->reserve(n_blocks);
+<<<<<<< HEAD
   const auto& mm_data = sequence->get_mm_data();
+=======
+  const auto& mm_data = sequence->mm_data();
+>>>>>>> 8e905af (feat: support prefix cache for multi-modal.)
   for (size_t i = 0; i < n_tokens; i += block_size_) {
     std::vector<const uint8_t*> mm_hash_values =
         get_block_mm_hash_values(mm_data, i, i + block_size_, cur_mm_idx);

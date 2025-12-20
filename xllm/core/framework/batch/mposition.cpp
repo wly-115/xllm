@@ -47,7 +47,7 @@ std::vector<std::tuple<std::string, int, int>> groupByTokenType(
 torch::Tensor MPositionHelper::get_positions() {
   // if (seq_.is_chunked_prefill_stage()) {
   if (seq_.kv_state().kv_cache_tokens_num() < seq_.num_prompt_tokens()) {
-    auto& data = seq_.get_mm_data();
+    auto& data = seq_.mm_data();
     MMBatchData mm_data({data});
 
     torch::Tensor image_grid_thw;
