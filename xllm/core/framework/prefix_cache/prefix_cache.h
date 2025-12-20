@@ -26,6 +26,7 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
+#include "common/macros.h"
 #include "common/types.h"
 #include "framework/block/block.h"
 #include "framework/kv_cache/kv_cache_event.h"
@@ -42,9 +43,16 @@ inline size_t round_down(size_t n, size_t multiple) {
 void murmur_hash3(const uint8_t* pre_hash_value,
                   const Slice<int32_t>& token_ids,
                   uint8_t* hash_value);
+class Sequence;
 
 class PrefixCache {
  public:
+  struct Options {
+    PROPERTY(int32_t, block_size) = 128;
+    PROPERTY(bool, enable_cache_upload) = false;
+    PROPERTY(bool, enable_mm_prefix_cache) = false;
+  };
+
   PrefixCache(const PrefixCache&) = delete;
   PrefixCache(PrefixCache&&) = delete;
   PrefixCache& operator=(const PrefixCache&) = delete;
@@ -58,15 +66,18 @@ class PrefixCache {
     sleep(2);
   };
 
-  std::vector<Block> match(const std::vector<int32_t>& token_ids) {
-    return match(Slice<int32_t>(token_ids), {});
+  std::vector<Block> match(Sequence* sequence,
+                           const std::vector<int32_t>& token_ids) {
+    return match(sequence, Slice<int32_t>(token_ids), {});
   }
 
   virtual std::vector<Block> match(
+      Sequence* sequence,
       const Slice<int32_t>& token_ids,
       const Slice<Block>& existed_shared_blocks = {});
 
-  virtual size_t insert(const Slice<int32_t>& token_ids,
+  virtual size_t insert(Sequence* sequence,
+                        const Slice<int32_t>& token_ids,
                         std::vector<Block>& blocks);
   virtual size_t insert(const std::vector<Block>& blocks);
 
@@ -98,9 +109,10 @@ class PrefixCache {
                                     std::vector<Block>& blocks);
 
  protected:
-  size_t insert(const Slice<int32_t>& token_ids,
-                std::vector<Block>& blocks,
-                std::vector<Murmur3Key>* insert_keys);
+  virtual size_t insert(Sequence* sequence,
+                        const Slice<int32_t>& token_ids,
+                        std::vector<Block>& blocks,
+                        std::vector<Murmur3Key>* insert_keys);
   size_t evict(size_t n_blocks, std::vector<Murmur3Key>* evict_keys);
 
   struct Node {
