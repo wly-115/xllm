@@ -60,6 +60,10 @@ class BatchInputBuilder {
   // Core building methods
   void process_sequences();
   void process_sequences_multithreaded();
+  void process_multi_modal_inputs(Sequence* sequence,
+                                  uint32_t n_kv_cache_tokens,
+                                  uint32_t q_seq_len,
+                                  int32_t seq_index);
   ForwardInput state_to_forward_input();
   RawForwardInput state_to_raw_forward_input();
 
@@ -152,7 +156,7 @@ class BatchInputBuilder {
   const std::vector<Sequence*>& sequences_;
   const std::vector<uint32_t>& allowed_max_tokens_;
   const std::vector<torch::Tensor>& input_embeddings_vec_;
-  const std::vector<MMData>& mm_data_vec_;
+  std::vector<MMData> mm_data_vec_;
   const ModelArgs* args_;
 
   // Builder state

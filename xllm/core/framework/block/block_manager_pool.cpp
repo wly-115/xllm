@@ -61,7 +61,7 @@ BlockManagerPool::BlockManagerPool(const Options& options, int32_t dp_size)
                                                     page_size,
                                                     /*dp_rank=*/i,
                                                     options_.model_id()));
-    } else if (options.enable_disagg_pd() || options_.enable_kvcache_store()) {
+    } else if (options_.enable_disagg_pd() || options_.enable_kvcache_store()) {
       block_managers_.emplace_back(
           std::make_unique<ConcurrentBlockManagerImpl>(block_options));
     } else {
@@ -262,7 +262,7 @@ bool BlockManagerPool::try_allocate(Sequence* sequence) {
     // If the sequence holds shared_blocks, the hash values of these blocks do
     // not need to be recalculated and can be reused directly.
     shared_blocks = block_managers_[dp_rank]->allocate_shared(
-        sequence->tokens(), existed_shared_blocks);
+        sequence->tokens(), existed_shared_blocks, sequence->mm_data());
 
     if (!shared_blocks.empty()) {
       sequence->add_kv_blocks(shared_blocks);
@@ -331,8 +331,8 @@ void BlockManagerPool::allocate_shared(Sequence* sequence) {
     // If the sequence holds shared_blocks, the hash values of these blocks do
     // not need to be recalculated and can be reused directly.
     std::vector<Block> shared_blocks =
-        block_managers_[dp_rank]->allocate_shared(sequence->tokens(),
-                                                  existed_shared_blocks);
+        block_managers_[dp_rank]->allocate_shared(
+            sequence->tokens(), existed_shared_blocks, sequence->mm_data());
     sequence->add_shared_kv_blocks(std::move(shared_blocks));
   }
 }
@@ -343,7 +343,7 @@ void BlockManagerPool::cache(Sequence* sequence) {
   auto* blocks = sequence->kv_state().mutable_kv_blocks();
   auto existed_shared_blocks_num = sequence->kv_state().shared_kv_blocks_num();
   block_managers_[dp_rank]->cache(
-      token_ids, *blocks, existed_shared_blocks_num);
+      token_ids, *blocks, existed_shared_blocks_num, sequence->mm_data());
 }
 
 void BlockManagerPool::get_merged_kvcache_event(KvCacheEvent* event) const {

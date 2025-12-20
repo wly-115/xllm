@@ -81,12 +81,6 @@ void Batch::add(Sequence* sequence, uint32_t allowed_max_token) {
   if (input_embedding.defined())
     input_embeddings_vec_.emplace_back(input_embedding);
 
-  const auto& mm_data = sequence->get_mm_data();
-  //  if (sequence->is_chunked_prefill_stage() &&  mm_data.valid())
-  // TODO:Compatible With Chunked Prefill
-  if ((sequence->stage() == SequenceStage::PREFILL) && mm_data.valid()) {
-    mm_data_vec_.emplace_back(mm_data);
-  }
   update_forward_type(sequence);
 }
 
@@ -478,8 +472,8 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
     int64_t mm_embedding_idx = 0;
     const auto sequences = get_sequences();
     for (auto* seq : sequences) {
-      int64_t n_images = seq->get_mm_data().size();
-      if (n_images <= 0) {
+      int64_t mm_item_count = seq->mm_data().size();
+      if (mm_item_count <= 0) {
         continue;
       }
       std::vector<torch::Tensor> seq_mm_embeddings;
@@ -487,7 +481,7 @@ void Batch::process_sample_output(const RawForwardOutput& raw_output,
       // the output is a single embedding tensor, else it would be a vector of
       // image embeddings
       int64_t output_tensor_size =
-          FLAGS_enable_return_mm_full_embeddings ? 1 : n_images;
+          FLAGS_enable_return_mm_full_embeddings ? 1 : mm_item_count;
       seq_mm_embeddings.reserve(output_tensor_size);
       for (int64_t i = mm_embedding_idx;
            i < mm_embedding_idx + output_tensor_size;

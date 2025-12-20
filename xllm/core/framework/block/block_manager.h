@@ -32,8 +32,7 @@ limitations under the License.
 #include "common/metrics.h"
 #include "common/types.h"
 #include "framework/prefix_cache/prefix_cache.h"
-#include "framework/request/request.h"
-#include "framework/request/sequence.h"
+#include "framework/request/mm_data.h"
 #include "util/timer.h"
 
 namespace xllm {
@@ -56,12 +55,14 @@ class BlockManager {
   virtual std::vector<Block> allocate(size_t num_blocks) = 0;
 
   virtual std::vector<Block> allocate_shared(
-      const Slice<int32_t>& tokens_ids,
-      const Slice<Block>& existed_shared_blocks = {}) = 0;
+      const Slice<int32_t>& token_ids,
+      const Slice<Block>& existed_shared_blocks = {},
+      const MMData& mm_data = MMData()) = 0;
 
   virtual void cache(const Slice<int32_t>& token_ids,
                      std::vector<Block>& blocks,
-                     size_t existed_shared_blocks_num = 0) = 0;
+                     size_t existed_shared_blocks_num = 0,
+                     const MMData& mm_data = MMData()) = 0;
   virtual void cache(const std::vector<Block>& blocks) = 0;
 
   // get merged all dp rank KVCacheEvent

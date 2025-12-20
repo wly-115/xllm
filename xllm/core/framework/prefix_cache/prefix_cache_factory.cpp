@@ -7,10 +7,9 @@
 
 namespace xllm {
 
-std::unique_ptr<PrefixCache> create_prefix_cache(
-    int32_t block_size,
-    const bool& enable_cache_upload) {
-  if (enable_cache_upload) {
+std::unique_ptr<PrefixCache> create_prefix_cache(PrefixCache::Options options) {
+  int32_t block_size = options.block_size();
+  if (options.enable_cache_upload()) {
     return std::make_unique<PrefixCacheWithUpload>(block_size);
   }
   return std::make_unique<PrefixCache>(block_size);
