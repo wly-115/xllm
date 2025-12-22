@@ -15,6 +15,7 @@ limitations under the License.
 
 #pragma once
 
+#include <absl/container/flat_hash_map.h>
 #include <torch/torch.h>
 
 #include <vector>
@@ -23,22 +24,20 @@ limitations under the License.
 #include "core/framework/request/mm_input.h"
 
 namespace xllm {
+using Shape = std::vector<int64_t>;
 
-class ImageProcessor {
+class VideoProcessor {
  public:
-  virtual ~ImageProcessor() = default;
+  virtual ~VideoProcessor() = default;
 
   virtual bool process(const MMInput& mm_inputs, MMData& mm_datas) = 0;
-  virtual torch::Tensor resize(const torch::Tensor& image,
-                               const std::vector<int64_t>& size,
-                               int resample,
-                               bool antialias = true);
-  virtual torch::Tensor centerCrop(const torch::Tensor& image,
-                                   const std::pair<int, int>& cropSize);
-  virtual torch::Tensor rescale(const torch::Tensor& image, double scale);
-  virtual torch::Tensor normalize(const torch::Tensor& image,
-                                  const std::vector<double>& mean,
-                                  const std::vector<double>& std);
-};
 
+  virtual std::pair<absl::flat_hash_map<Shape, torch::Tensor>,
+                    std::vector<std::pair<Shape, size_t>>>
+  group_videos_by_shape(const std::vector<torch::Tensor>& images);
+
+  virtual std::vector<torch::Tensor> reorder_videos(
+      absl::flat_hash_map<Shape, torch::Tensor> grouped_images,
+      std::vector<std::pair<Shape, size_t>> grouped_indexes);
+};
 }  // namespace xllm

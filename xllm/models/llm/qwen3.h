@@ -83,6 +83,9 @@ class QWen3ModelImpl : public LlmModelImplBase<QWen3DecoderLayer> {
                                 torch::Tensor positions,
                                 std::vector<KVCache>& kv_caches,
                                 const ModelInputParams& input_params) {
+    LOG(INFO) << "QWen3ModelImpl forward called.";
+    LOG(INFO) << "token " << tokens;
+    LOG(INFO) << "positions " << positions;
     bool use_deepstack = input_params.deep_stacks.size() > 0;
     ModelInputParams& input_params_new =
         const_cast<ModelInputParams&>(input_params);

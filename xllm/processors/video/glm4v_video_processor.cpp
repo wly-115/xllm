@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "glm4v_image_processor.h"
-
+#include "vision_util.h"
 namespace xllm {
 
 namespace {
@@ -77,7 +77,7 @@ std::optional<Size> smart_resize(int num_frames,
 }
 }  // namespace
 
-torch::Tensor Glm4VImageProcessor::sample_frames(const VideoMetadata& metadata,
+torch::Tensor Glm4VVideoProcessor::sample_frames(const VideoMetadata& metadata,
                                                  int temporal_patch_size) {
   // video: [T, C, H, W]
   const int total_frames = metadata.total_num_frames;
@@ -188,17 +188,9 @@ torch::Tensor Glm4VImageProcessor::sample_frames(const VideoMetadata& metadata,
   return torch::tensor(uniq, torch::TensorOptions().dtype(torch::kLong));
 }
 
-Glm4VImageProcessor::Glm4VImageProcessor(const ModelArgs& args) {
+Glm4VVideoProcessor::Glm4VVideoProcessor(const ModelArgs& args) {
   image_mean_ = args.mm_image_normalize_mean();
   image_std_ = args.mm_image_normalize_std();
-
-  if (args.mm_image_max_pixels() && args.mm_image_min_pixels()) {
-    min_pixels_ = args.mm_image_min_pixels();
-    max_pixels_ = args.mm_image_max_pixels();
-  } else if (args.mm_image_shortest_edge() && args.mm_image_longest_edge()) {
-    min_pixels_ = args.mm_image_shortest_edge();
-    max_pixels_ = args.mm_image_longest_edge();
-  }
 
   patch_size_ = args.mm_image_patch_size();
   temporal_patch_size_ = args.mm_image_temporal_patch_size();
@@ -239,21 +231,13 @@ Glm4VImageProcessor::Glm4VImageProcessor(const ModelArgs& args) {
   }
 }
 
-bool Glm4VImageProcessor::process(const MMInput& inputs, MMData& datas) {
-  std::vector<torch::Tensor> images = inputs.get_decode_data(MMType::IMAGE);
+bool Glm4VVideoProcessor::process(const MMInput& inputs, MMData& datas) {
   std::vector<torch::Tensor> videos = inputs.get_decode_data(MMType::VIDEO);
   std::vector<VideoMetadata> video_meta_list = inputs.get_video_metadata();
 
-  if (images.empty() && (videos.empty() || video_meta_list.empty())) {
-    LOG(ERROR) << "no image/video tensor found.";
+  if (videos.empty() || video_meta_list.empty()) {
+    LOG(ERROR) << "no video tensor found.";
     return false;
-  }
-
-  if (!images.empty()) {
-    if (!this->process_images(images, datas)) {
-      LOG(ERROR) << " process image failed.";
-      return false;
-    }
   }
 
   if (!videos.empty()) {
@@ -266,100 +250,7 @@ bool Glm4VImageProcessor::process(const MMInput& inputs, MMData& datas) {
   return true;
 }
 
-bool Glm4VImageProcessor::process_images(std::vector<torch::Tensor> images,
-                                         MMData& mm_datas) {
-  std::vector<torch::Tensor> pixel_values;
-  std::vector<int64_t> grids;
-
-  for (const auto& img : images) {
-    if (!this->process_image(img, pixel_values, grids)) {
-      return false;
-    }
-  }
-
-  auto values = torch::cat(pixel_values);
-  auto thw = torch::tensor(grids);
-
-  thw = thw.clone().reshape({-1, 3});
-  mm_datas.add(MMType::IMAGE, "image_grid_thw", thw);
-  mm_datas.add(MMType::IMAGE, "pixel_values", values);
-
-  return true;
-}
-
-bool Glm4VImageProcessor::process_image(
-    torch::Tensor image,
-    std::vector<torch::Tensor>& pixel_values,
-    std::vector<int64_t>& grids) {
-  auto shape = image.sizes();
-
-  auto resized_height = shape[1];
-  auto resized_width = shape[2];
-
-  // do_convert_rgb
-
-  // resize
-  if (do_resize_) {
-    auto size = smart_resize(temporal_patch_size_,
-                             resized_height,
-                             resized_width,
-                             temporal_patch_size_,
-                             patch_size_ * merge_size_,
-                             min_pixels_,
-                             max_pixels_);
-    if (!size) {
-      return false;
-    }
-
-    std::tie(resized_height, resized_width) = *size;
-    image =
-        this->resize(image, {resized_height, resized_width}, resample_, true);
-  }
-
-  // normalize
-  if (do_normalize_) {
-    image = this->normalize(image, image_mean_, image_std_);
-  }
-
-  // rescale
-  if (do_rescale_) {
-    image = this->rescale(image, rescale_factor_);
-  }
-
-  auto patches = torch::stack({image}, 0);
-
-  auto repeats = patches[-1].unsqueeze(0).repeat(
-      /*{temporal_patch_size_ - (shape[0] % temporal_patch_size_)*/ {
-          temporal_patch_size_ - 1, 1, 1, 1});
-  patches = torch::cat({patches, repeats}, 0);
-  shape = patches.sizes();
-  auto channel = shape[1];
-  auto grid_t = shape[0] / temporal_patch_size_;
-
-  auto grid_h = resized_height / patch_size_;
-  auto grid_w = resized_width / patch_size_;
-
-  patches = patches.view({grid_t,
-                          temporal_patch_size_,
-                          channel,
-                          grid_h / merge_size_,
-                          merge_size_,
-                          patch_size_,
-                          grid_w / merge_size_,
-                          merge_size_,
-                          patch_size_});
-  patches = patches.permute({0, 3, 6, 4, 7, 2, 1, 5, 8});
-  patches = patches.reshape(
-      {grid_t * grid_h * grid_w,
-       channel * temporal_patch_size_ * patch_size_ * patch_size_});
-
-  pixel_values.emplace_back(patches);
-  grids.insert(grids.end(), {grid_t, grid_h, grid_w});
-
-  return true;
-}
-
-bool Glm4VImageProcessor::process_videos(
+bool Glm4VVideoProcessor::process_videos(
     std::vector<torch::Tensor> videos,
     std::vector<VideoMetadata> video_meta_list,
     MMData& mm_datas) {
@@ -385,7 +276,7 @@ bool Glm4VImageProcessor::process_videos(
   return true;
 }
 
-bool Glm4VImageProcessor::process_video(
+bool Glm4VVideoProcessor::process_video(
     torch::Tensor origin_video,
     VideoMetadata& metadata,
     std::vector<torch::Tensor>& pixel_values,
@@ -449,12 +340,13 @@ bool Glm4VImageProcessor::process_video(
   for (auto& frame : frames) {
     // resize
     if (do_resize_)
-      frame =
-          this->resize(frame, {resized_height, resized_width}, resample_, true);
+      frame = ImageUtils::resize_video(
+          frame, {resized_height, resized_width}, resample_, true);
     // normalize
-    if (do_normalize_) frame = this->normalize(frame, video_mean_, video_std_);
+    if (do_normalize_)
+      frame = ImageUtils::normalize(frame, video_mean_, video_std_);
     // rescale
-    if (do_rescale_) frame = this->rescale(frame, rescale_factor_);
+    if (do_rescale_) frame = ImageUtils::rescale(frame, rescale_factor_);
     out_frames.push_back(frame);
   }
 

@@ -100,14 +100,14 @@ VLMMaster::VLMMaster(const Options& options)
   }
 
   // create image processor
-  auto image_processor_factory =
-      ModelRegistry::get_image_processor_factory(model_args_.model_type());
-  if (image_processor_factory == nullptr) {
-    LOG(ERROR) << "No image processor defined for model type: "
-               << model_args_.model_type();
-  } else {
-    image_processor_ = image_processor_factory(model_args_);
-  }
+  // auto image_processor_factory =
+  //     ModelRegistry::get_image_processor_factory(model_args_.model_type());
+  // if (image_processor_factory == nullptr) {
+  //   LOG(ERROR) << "No image processor defined for model type: "
+  //              << model_args_.model_type();
+  // } else {
+  //   image_processor_ = image_processor_factory(model_args_);
+  // }
 
   // construct tokenizer and handling threads
   tokenizer_ = engine_->tokenizer()->clone();
@@ -214,7 +214,9 @@ void VLMMaster::handle_request(const std::vector<Message>& messages,
   }
 
   MMData mm_data;
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
+
+  if (!mm_inputs.empty() &&
+      !input_processor_->process_multimodal_inputs(mm_inputs, mm_data)) {
     LOG(ERROR) << " image processor process failed.";
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
                         "Image processor process failed.");
@@ -306,7 +308,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
     return nullptr;
   }
   Timer timer;
-  input_processor_->process(prompt, mm_data);
+  input_processor_->replace_placeholder(prompt, mm_data);
 
   std::vector<int> prompt_tokens;
   if (!tokenizer_->encode(prompt, &prompt_tokens)) {

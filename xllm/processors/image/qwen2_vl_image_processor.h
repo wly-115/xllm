@@ -32,23 +32,24 @@ class Qwen2VLImageProcessor : public ImageProcessor {
 
  private:
   bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
-  bool process_image(torch::Tensor image,
-                     std::vector<torch::Tensor>& pixel_values,
-                     std::vector<int64_t>& grids);
-
   bool process_videos(std::vector<torch::Tensor> videos,
                       std::vector<VideoMetadata> video_meta_list,
                       MMData& mm_datas);
-  bool process_video(torch::Tensor video,
-                     VideoMetadata& metadata,
-                     std::vector<torch::Tensor>& pixel_values,
-                     std::vector<int64_t>& grids);
   torch::Tensor sample_frames(const VideoMetadata& metadata,
                               int temporal_patch_size,
                               int min_frames,
                               int max_frames,
                               int num_frames = -1,
                               double set_fps = -1.0);
+  void update_video_metadata(VideoMetadata& metadata,
+                             torch::Tensor frames_index);
+  torch::Tensor get_video_frames(const int64_t origin_frames_num,
+                                 const VideoMetadata& metadata,
+                                 int temporal_patch_size,
+                                 int min_frames,
+                                 int max_frames,
+                                 int num_frames = -1,
+                                 double set_fps = -1.0);
 
  private:
   bool do_convert_rgb_ = true;

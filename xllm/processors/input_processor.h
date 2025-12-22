@@ -22,12 +22,24 @@ limitations under the License.
 #include "core/framework/request/mm_data.h"
 
 namespace xllm {
+class ImageProcessor;
+class VideoProcessor;
 
 class InputProcessor {
  public:
   virtual ~InputProcessor() = default;
 
-  virtual void process(std::string& prompt, const MMData& mm_data) = 0;
+  virtual bool process(std::string& prompt,
+                       const MMInput& mm_inputs,
+                       MMData& mm_data) = 0;
+  virtual bool process_multimodal_inputs(const MMInput& mm_inputs,
+                                         MMData& mm_data) = 0;
+  virtual void replace_placeholder(std::string& prompt,
+                                   const MMData& mm_data) = 0;
+
+ private:
+  std::unique_ptr<ImageProcessor> image_processor_;
+  std::unique_ptr<VideoProcessor> video_processor_;
 };
 
 }  // namespace xllm

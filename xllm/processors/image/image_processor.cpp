@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "clip_image_processor.h"
+#include "image_processor.h"
 
 namespace xllm {
 
@@ -21,9 +21,10 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
                                      const std::vector<int64_t>& size,
                                      int resample,
                                      bool antialias) {
-  if (image.dim() != 3) {
-    LOG(FATAL) << "Input image must be a 3D tensor (C x H x W).";
-  }
+  LOG(INFO) << "resize input " << image.sizes();
+  // if (image.dim() != 3) {
+  //   LOG(FATAL) << "Input image must be a 3D tensor (C x H x W).";
+  // }
   auto options = torch::nn::functional::InterpolateFuncOptions()
                      .size(size)
                      .align_corners(false)
@@ -41,18 +42,17 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
     default:
       LOG(FATAL) << "Invalid resample value. Must be one of 1, 2, or 3.";
   }
-  return torch::nn::functional::interpolate(image.unsqueeze(0), options)
-      .squeeze(0)
+  return torch::nn::functional::interpolate(image, options)
       .clamp(0, 255)
       .to(torch::kUInt8);
 }
 
 torch::Tensor ImageProcessor::centerCrop(const torch::Tensor& image,
                                          const std::pair<int, int>& cropSize) {
-  if (image.dim() != 3) {
-    LOG(FATAL)
-        << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
-  }
+  // if (image.dim() != 3) {
+  //   LOG(FATAL)
+  //       << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
+  // }
 
   int cropHeight = cropSize.first;
   int cropWidth = cropSize.second;
@@ -101,12 +101,12 @@ torch::Tensor ImageProcessor::rescale(const torch::Tensor& image,
 torch::Tensor ImageProcessor::normalize(const torch::Tensor& image,
                                         const std::vector<double>& mean,
                                         const std::vector<double>& std) {
-  if (image.dim() != 3) {
-    LOG(FATAL)
-        << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
-  }
-
-  int numChannels = image.size(0);
+  // if (image.dim() != 3) {
+  //   LOG(FATAL)
+  //       << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
+  // }
+  // TODO: NCHW
+  int numChannels = image.size(1);
   if (mean.size() != numChannels || std.size() != numChannels) {
     LOG(FATAL) << "Mean and std vectors must have the same number "
                << "of elements as the number of channels in the "
@@ -126,6 +126,81 @@ torch::Tensor ImageProcessor::normalize(const torch::Tensor& image,
 
   result = result.sub(m_tensor);
   return result.div_(s_tensor);
+}
+
+std::pair<absl::flat_hash_map<Shape, torch::Tensor>,
+          std::vector<std::pair<Shape, size_t>>>
+ImageProcessor::group_images_by_shape(
+    const std::vector<torch::Tensor>& images) {
+  absl::flat_hash_map<Shape, std::vector<torch::Tensor>> temp_groups;
+  std::vector<std::pair<Shape, size_t>> grouped_index;
+  absl::flat_hash_map<Shape, torch::Tensor> grouped_images;
+  grouped_index.reserve(images.size());
+  for (auto& img : images) {
+    auto sizes = img.sizes();
+    Shape shape = {img.size(-2), img.size(-1)};
+    auto& group = temp_groups[shape];
+    size_t pos_in_group = group.size();
+    group.push_back(img);
+    grouped_index.push_back(std::make_pair(shape, pos_in_group - 1));
+  }
+
+  for (auto& [shape, tensors] : temp_groups) {
+    grouped_images[shape] = torch::stack(tensors, 0);
+  }
+  return std::make_pair(std::move(grouped_images), std::move(grouped_index));
+}
+
+std::vector<torch::Tensor> ImageProcessor::reorder_images(
+    absl::flat_hash_map<Shape, torch::Tensor> grouped_images,  // b,c,h,w
+    std::vector<std::pair<Shape, size_t>> grouped_indexes) {
+  std::vector<torch::Tensor> ordered_images;
+  int image_num = grouped_indexes.size();
+  ordered_images.reserve(image_num);
+
+  for (int i = 0; i < image_num; i++) {
+    ordered_images.push_back(
+        grouped_images[grouped_indexes[i].first][grouped_indexes[i].second]);
+  }
+  return ordered_images;
+}
+
+std::pair<absl::flat_hash_map<Shape, torch::Tensor>,
+          std::vector<std::pair<Shape, size_t>>>
+ImageProcessor::group_videos_by_shape(
+    const std::vector<torch::Tensor>& videos) {
+  absl::flat_hash_map<Shape, std::vector<torch::Tensor>> temp_groups;
+  std::vector<std::pair<Shape, size_t>> grouped_index;
+  absl::flat_hash_map<Shape, torch::Tensor> grouped_videos;
+  grouped_index.reserve(videos.size());
+  // video [TCHW]
+  for (auto& video : videos) {
+    Shape shape = {video.size(0), video.size(-2), video.size(-1)};
+
+    auto& group = temp_groups[shape];
+    size_t pos_in_group = group.size();
+    group.push_back(video);
+    grouped_index.push_back(std::make_pair(shape, pos_in_group - 1));
+  }
+
+  for (auto& [shape, tensors] : temp_groups) {
+    grouped_videos[shape] = torch::stack(tensors, 0);
+  }
+  return std::make_pair(std::move(grouped_videos), std::move(grouped_index));
+}
+
+std::vector<torch::Tensor> ImageProcessor::reorder_videos(
+    absl::flat_hash_map<Shape, torch::Tensor> grouped_videos,
+    std::vector<std::pair<Shape, size_t>> grouped_indexes) {
+  std::vector<torch::Tensor> ordered_videos;
+  int video_num = grouped_indexes.size();
+  ordered_videos.reserve(video_num);
+
+  for (int idx = 0; idx < video_num; idx++) {
+    ordered_videos.push_back(grouped_videos[grouped_indexes[idx].first]
+                                           [grouped_indexes[idx].second]);
+  }
+  return ordered_videos;
 }
 
 }  // namespace xllm
