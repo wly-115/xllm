@@ -688,52 +688,6 @@ class Qwen3_VLForConditionalGenerationImpl : public torch::nn::Module {
       video_inputs = Qwen3_VLVideoInputs{
           pixel_values_videos, video_grid_thw, second_per_grid_ts};
   }
-  torch::Tensor generate_multimodal_mask(torch::Tensor input_ids) {
-    auto special_token_ids = torch::tensor(
-        {model_args_.image_token_id(), model_args_.video_token_id()},
-        input_ids.options().dtype(torch::kInt64));
-    auto is_multimodal = torch::isin(input_ids, special_token_ids);
-    return is_multimodal;
-  }
-
-  std::vector<torch::Tensor> get_deep_stacks(
-      const ModelInputParams& input_params) {
-    const auto& mm_data = input_params.mm_data;
-    if (!mm_data.has("embedding|deepstack_0")) {
-      return {};
-    }
-
-    std::vector<torch::Tensor> deepstacks = {
-        mm_data.get<torch::Tensor>("embedding|deepstack_0").value(),
-        mm_data.get<torch::Tensor>("embedding|deepstack_1").value(),
-        mm_data.get<torch::Tensor>("embedding|deepstack_2").value()};
-    return deepstacks;
-  }
-  torch::Tensor get_input_embeddings(const torch::Tensor input_ids,
-                                     const ModelInputParams& input_params) {
-    const auto& mm_data = input_params.mm_data;
-    torch::Tensor multimodal_embeds;
-    if (const auto& emb = mm_data.get<torch::Tensor>("embedding")) {
-      multimodal_embeds = emb.value();
-    }
-    auto inputs_embeds = language_model_->get_input_embeddings(input_ids);
-    if (!multimodal_embeds.defined()) {
-      return inputs_embeds;
-    }
-    auto is_multimodal = generate_multimodal_mask(input_ids);
-    input_params.visual_pos_masks = is_multimodal;
-    inputs_embeds = merge_multimodal_embeddings(
-        inputs_embeds, multimodal_embeds, is_multimodal);
-    return inputs_embeds;
-  }
-
-  torch::Tensor merge_multimodal_embeddings(
-      torch::Tensor inputs_embeds,
-      const torch::Tensor& multimodal_embeds,
-      const torch::Tensor& is_multimodal) {
-    inputs_embeds.index_put_({is_multimodal}, multimodal_embeds);
-    return inputs_embeds;
-  }
 
   MMDict get_multimodal_embeddings(const ModelInputParams& input_params) {
     std::optional<Qwen3_VLImageInputs> image_input;
@@ -791,6 +745,53 @@ class Qwen3_VLForConditionalGenerationImpl : public torch::nn::Module {
       }
     }
     return multimodal_embeds;
+  }
+
+  torch::Tensor generate_multimodal_mask(torch::Tensor input_ids) {
+    auto special_token_ids = torch::tensor(
+        {model_args_.image_token_id(), model_args_.video_token_id()},
+        input_ids.options().dtype(torch::kInt64));
+    auto is_multimodal = torch::isin(input_ids, special_token_ids);
+    return is_multimodal;
+  }
+
+  std::vector<torch::Tensor> get_deep_stacks(
+      const ModelInputParams& input_params) {
+    const auto& mm_data = input_params.mm_data;
+    if (!mm_data.has("embedding|deepstack_0")) {
+      return {};
+    }
+
+    std::vector<torch::Tensor> deepstacks = {
+        mm_data.get<torch::Tensor>("embedding|deepstack_0").value(),
+        mm_data.get<torch::Tensor>("embedding|deepstack_1").value(),
+        mm_data.get<torch::Tensor>("embedding|deepstack_2").value()};
+    return deepstacks;
+  }
+  torch::Tensor merge_multimodal_embeddings(
+      torch::Tensor inputs_embeds,
+      const torch::Tensor& multimodal_embeds,
+      const torch::Tensor& is_multimodal) {
+    inputs_embeds.index_put_({is_multimodal}, multimodal_embeds);
+    return inputs_embeds;
+  }
+
+  torch::Tensor get_input_embeddings(const torch::Tensor input_ids,
+                                     const ModelInputParams& input_params) {
+    const auto& mm_data = input_params.mm_data;
+    torch::Tensor multimodal_embeds;
+    if (const auto& emb = mm_data.get<torch::Tensor>("embedding")) {
+      multimodal_embeds = emb.value();
+    }
+    auto inputs_embeds = language_model_->get_input_embeddings(input_ids);
+    if (!multimodal_embeds.defined()) {
+      return inputs_embeds;
+    }
+    auto is_multimodal = generate_multimodal_mask(input_ids);
+    input_params.visual_pos_masks = is_multimodal;
+    inputs_embeds = merge_multimodal_embeddings(
+        inputs_embeds, multimodal_embeds, is_multimodal);
+    return inputs_embeds;
   }
 
   torch::Tensor forward(const torch::Tensor& tokens,
