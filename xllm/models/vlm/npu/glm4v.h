@@ -146,9 +146,9 @@ class GLM4VInputProcessor : public InputProcessor {
 
   void find_mm_spans(const std::vector<int>& prompt, MMData& mm_data) override {
     size_t tokens_num = prompt.size();
-    uint32_t global_mm_index = 0;
-    uint32_t offset = 0;
-    uint32_t length = 0;
+    int32_t global_mm_index = 0;
+    int32_t offset = 0;
+    int32_t length = 0;
     bool is_video = false;
     auto& mm_items = mm_data.items<MMItemVec>();
     // TODO:support video info.

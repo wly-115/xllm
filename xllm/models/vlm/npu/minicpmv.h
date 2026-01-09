@@ -95,9 +95,9 @@ class MiniCPMInputProcessor : public InputProcessor {
     prompt = new_prompt;
   }
   void find_mm_spans(const std::vector<int>& prompt, MMData& mm_data) override {
-    uint32_t global_mm_index = 0;
-    uint32_t offset = 0;
-    uint32_t length = 0;
+    int32_t global_mm_index = 0;
+    int32_t offset = 0;
+    int32_t length = 0;
     auto& mm_items = mm_data.items<MMItemVec>();
     auto start = prompt.begin();
     while (true) {

@@ -41,9 +41,9 @@ class InputProcessor {
       auto data = mm_input_items[idx].decode_data_;
       if (data.defined()) {
         auto mm_hash = hash_tensor(data);
-        auto& prefix_cache =
-            mm_items[idx].mutable_state().mutable_prefix_cache();
-        prefix_cache.key = mm_hash;
+        auto& schedule_data =
+            mm_items[idx].mutable_state().mutable_schedule_data();
+        schedule_data.key = mm_hash;
       }
     }
   }

@@ -126,9 +126,9 @@ class Qwen2_5_VLInputProcessor : public InputProcessor {
 
   void find_mm_spans(const std::vector<int>& prompt, MMData& mm_data) {
     auto start = prompt.begin();
-    uint32_t global_mm_index = 0;
-    uint32_t offset = 0;
-    uint32_t length = 0;
+    int32_t global_mm_index = 0;
+    int32_t offset = 0;
+    int32_t length = 0;
     auto& mm_items = mm_data.items<MMItemVec>();
     while (true) {
       auto vision_start_it =
