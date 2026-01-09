@@ -51,13 +51,6 @@ void Batch::add(Sequence* sequence, uint32_t allowed_max_token) {
   const auto& input_embedding = sequence->get_input_embedding();
   if (input_embedding.defined())
     input_embeddings_vec_.emplace_back(input_embedding);
-
-  const auto& mm_data = sequence->mm_data();
-  //  if (sequence->is_chunked_prefill_stage() &&  mm_data.valid())
-  // TODO:Compatible With Chunked Prefill
-  if ((sequence->stage() != SequenceStage::DECODE) && mm_data.valid()) {
-    mm_data_vec_.emplace_back(mm_data);
-  }
 }
 
 void Batch::update_forward_type(Sequence* sequence) {

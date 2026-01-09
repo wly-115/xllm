@@ -39,7 +39,10 @@ class MMDataItem {
   class IVisitor {
    public:
     virtual ~IVisitor() = default;
-    virtual bool visit(MMDataItem& item) = 0;
+    virtual bool visit(MMDataItem& item) { return true; };
+    virtual bool visit(MMDataItem& item, int32_t mm_data_index) {
+      return true;
+    };
   };
 
  public:
