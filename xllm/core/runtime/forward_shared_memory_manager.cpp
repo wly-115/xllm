@@ -169,7 +169,7 @@ inline size_t get_mm_item_size(const MMDataItem& mm_item) {
 
   // prefix_cache
   total += MURMUR_HASH3_VALUE_LEN;
-  total += type_size<uint32_t>;
+  total += type_size<int32_t>*2;
 
   return total;
 }
@@ -526,9 +526,10 @@ inline void write_mm_item(char*& buffer, const MMDataItem& item) {
   write_data(buffer, state.token_pos().length);
 
   // write prefix_cache
-  memcpy(buffer, state.prefix_cache().key.data, MURMUR_HASH3_VALUE_LEN);
+  memcpy(buffer, state.schedule_data().key.data, MURMUR_HASH3_VALUE_LEN);
   buffer += MURMUR_HASH3_VALUE_LEN;
-  write_data(buffer, state.prefix_cache().cached_token_num);
+  write_data(buffer, state.schedule_data().start_pos);
+  write_data(buffer,state.schedule_data().end_pos);
 }
 
 inline void write_mm_data_items(char*& buffer, const MMData& mm_data) {
@@ -895,11 +896,13 @@ inline void read_mm_item(const char*& buffer,
 
   // read prefix_cache
   std::memcpy(
-      state.mutable_prefix_cache().key.data, buffer, MURMUR_HASH3_VALUE_LEN);
+      state.mutable_schedule_data().key.data, buffer, MURMUR_HASH3_VALUE_LEN);
   buffer += MURMUR_HASH3_VALUE_LEN;
   safe_advance_buffer(device_buffer, MURMUR_HASH3_VALUE_LEN);
   read_data(
-      buffer, state.mutable_prefix_cache().cached_token_num, device_buffer);
+      buffer, state.mutable_schedule_data().start_pos, device_buffer);
+  read_data(
+      buffer, state.mutable_schedule_data().end_pos, device_buffer);
 }
 
 inline void read_mm_data_dict(const char*& buffer,
@@ -1006,6 +1009,7 @@ inline void deserialize_raw_forward_input(const char*& buffer,
   read_tensor(buffer, input_params.dst_block_indices, device_buffer);
   read_tensor(buffer, input_params.cum_sum, device_buffer);
   read_mm_batch_data(buffer, input_params.mm_data, device_buffer);
+  input_params.mm_data.debug_print();
   read_tensor_and_vector(buffer,
                          input_params.kv_cache_tokens_nums,
                          input_params.kv_cache_tokens_nums_host,

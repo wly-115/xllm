@@ -42,7 +42,7 @@ class InputProcessor {
       if (data.defined()) {
         auto mm_hash = hash_tensor(data);
         auto& prefix_cache =
-            mm_items[idx].mutable_state().mutable_prefix_cache();
+            mm_items[idx].mutable_state().mutable_schedule_data();
         prefix_cache.key = mm_hash;
       }
     }

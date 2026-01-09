@@ -70,8 +70,7 @@ bool CollectMMDataTensorVisitor::visit(MMData& data) {
 }
 
 bool EncoderInputGatherVisitor::visit(MMDataItem& item) {
-  if (item.state().prefix_complete_cached()) return true;
-
+  if(!item.state().is_scheduling()) return true;
   if (item.is_embedded()) return true;
 
   for (const auto& [key, value] : item.data()) {
@@ -103,8 +102,7 @@ bool EncoderInputGatherVisitor::finish(MMBatchData& mm_data) {
 }
 
 bool EncoderOutputScatterVisitor::visit(MMDataItem& item) {
-  if (item.state().prefix_complete_cached()) return true;
-
+  if(!item.state().is_scheduling()) return true;
   if (item.is_embedded()) return true;
 
   std::string prefix;
@@ -157,12 +155,15 @@ bool EncoderOutputScatterVisitor::finish() const {
 
 bool EncoderEmbeddingGatherVisitor::visit(MMDataItem& item) {
   const auto& state = item.state();
-  if (state.prefix_complete_cached()) return true;
+    int32_t start_pos = state.schedule_data().start_pos;
+  int32_t end_pos = state.schedule_data().end_pos;
+  LOG(INFO) << start_pos << ' ' << end_pos;
+  if(!state.is_scheduling()) return true;
 
   int modality_tokens = state.token_pos().length;
-  uint32_t cached_token_num = state.prefix_cache().cached_token_num;
-  auto mask = torch::ones({modality_tokens}, torch::dtype(torch::kBool));
-  mask.index({torch::indexing::Slice(0, cached_token_num)}) = false;
+
+  auto mask = torch::zeros({modality_tokens}, torch::dtype(torch::kBool));
+  mask.index({torch::indexing::Slice(start_pos, end_pos)}) = true;
   for (auto& [key, value] : item.mutable_data()) {
     auto& emb = std::get<torch::Tensor>(value);
     emb = safe_to(emb, device_, true);
@@ -188,24 +189,20 @@ bool EncoderEmbeddingGatherVisitor::finish(MMBatchData& mm_data) {
   return true;
 }
 
-bool UpdateMMItemCachedStateVisitor::visit(MMDataItem& item) {
-  auto& cache = item.mutable_state().mutable_prefix_cache();
+bool UpdateMMItemScheduleStateVisitor::visit(MMDataItem& item) {
+  auto& schedule_data = item.mutable_state().mutable_schedule_data();
   auto& token_pos = item.state().token_pos();
-  uint32_t mm_end_idx = token_pos.offset + token_pos.length - 1;
-
-  if (last_matched_token_index_ == n_tokens_ - 1) {
-    last_matched_token_index_ = last_matched_token_index_ - block_size_;
-  }
-  if (token_pos.offset > last_matched_token_index_) {
+  int32_t mm_end_idx = token_pos.offset + token_pos.length - 1;
+ 
+  uint32_t schedule_token_num =  seq_len_ -  computed_token_num_;  
+  if(mm_end_idx < computed_token_num_) {
     return false;
-  } else if (mm_end_idx <= last_matched_token_index_) {
-    cache.cached_token_num = token_pos.length;
-  } else {
-    cache.cached_token_num =
-        (last_matched_token_index_ > token_pos.offset)
-            ? (last_matched_token_index_ - token_pos.offset + 1)
-            : 0;
-  }
+  }            
+  if(token_pos.offset >= computed_token_num_ + schedule_token_num) {
+    return false;
+  }   
+  schedule_data.start_pos = std::max(static_cast<int32_t>(computed_token_num_)-static_cast<int32_t>(token_pos.offset), 0);
+  schedule_data.end_pos = std::min(static_cast<int32_t>(computed_token_num_) -static_cast<int32_t>(token_pos.offset) + static_cast<int32_t>(schedule_token_num),mm_end_idx);
   return true;
 }
 

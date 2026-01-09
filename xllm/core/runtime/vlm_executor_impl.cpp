@@ -46,8 +46,10 @@ torch::Tensor VlmExecutorImpl::run(const torch::Tensor& tokens,
   torch::NoGradGuard no_grad;
 
   auto& mm_data = params.mm_data;
+  mm_data.debug_print();
   EncoderInputGatherVisitor input_gather;
   mm_data.foreach (input_gather);
+  
   CHECK(input_gather.finish(mm_data));
   mm_data.to(device_);
 

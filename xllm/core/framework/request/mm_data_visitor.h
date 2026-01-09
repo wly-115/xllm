@@ -101,21 +101,18 @@ class EncoderEmbeddingGatherVisitor : public MMDataItem::IVisitor {
   std::unordered_map<MMKey, std::vector<torch::Tensor>> datas_;
 };
 
-class UpdateMMItemCachedStateVisitor : public MMDataItem::IVisitor {
+class UpdateMMItemScheduleStateVisitor : public MMDataItem::IVisitor {
  public:
-  UpdateMMItemCachedStateVisitor(uint last_matched_token_index = 0,
-                                 uint32_t n_tokens = 0,
-                                 uint32_t block_size = 0)
-      : last_matched_token_index_(last_matched_token_index),
-        n_tokens_(n_tokens),
-        block_size_(block_size) {}
+  UpdateMMItemScheduleStateVisitor(uint32_t computed_token_num = 0,
+                                 uint32_t seq_len = 0)
+      : computed_token_num_(computed_token_num),
+        seq_len_(seq_len) {}
 
   bool visit(MMDataItem& item) override;
 
  private:
-  uint last_matched_token_index_ = 0;
-  uint32_t n_tokens_ = 0;
-  uint32_t block_size_ = 0;
+  uint32_t computed_token_num_ = 0;
+  uint32_t seq_len_ = 0;
 };
 
 }  // namespace xllm

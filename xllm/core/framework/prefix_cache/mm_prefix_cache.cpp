@@ -26,7 +26,6 @@ limitations under the License.
 
 #include "common/global_flags.h"
 #include "common/metrics.h"
-#include "request/mm_data_visitor.h"
 #include "request/sequence.h"
 
 namespace xllm {
@@ -131,16 +130,6 @@ std::vector<Block> MMPrefixCache::match(
       break;
     }
   }
-  uint32_t last_matched_token_index = 0;
-  if (cur_token_index > n_tokens) {
-    cur_token_index = cur_token_index - block_size_ + 1;
-  }
-  last_matched_token_index =
-      cur_token_index ? cur_token_index - 1 : last_matched_token_index;
-
-  UpdateMMItemCachedStateVisitor visitor(
-      last_matched_token_index, token_ids.size(), block_size_);
-  mm_data.foreach (visitor);
 
   // update LRU list
   while (!node_list.is_empty()) {
@@ -248,8 +237,8 @@ std::vector<const uint8_t*> MMPrefixCache::get_block_mm_hash_values(
         cur_mm_idx++;
         continue;
       }
-      auto& prefix_cache = mm_items[cur_mm_idx].state().prefix_cache();
-      mm_hash_values.push_back(prefix_cache.key.data);
+      auto& schedule_data = mm_items[cur_mm_idx].state().schedule_data();
+      mm_hash_values.push_back(schedule_data.key.data);
       if (mm_end_idx <= end_token_idx) {
         cur_mm_idx++;
       } else {
