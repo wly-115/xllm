@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "minicpmv_image_processor.h"
+#include "minicpmv_input_processor.h"
 
 namespace xllm {
 
-MiniCPMVImageProcessor::MiniCPMVImageProcessor(const ModelArgs& args) {
+MiniCPMVInputProcessor::MiniCPMVInputProcessor(const ModelArgs& args) {
   max_slice_nums_ = args.vision_max_slice_nums();
   scale_resolution_ = args.mm_scale_resolution();
   patch_size_ = args.mm_patch_size();
@@ -27,7 +27,7 @@ MiniCPMVImageProcessor::MiniCPMVImageProcessor(const ModelArgs& args) {
   norm_std_ = args.mm_image_normalize_std();
 }
 
-bool MiniCPMVImageProcessor::process(const MMInput& mm_inputs,
+bool MiniCPMVInputProcessor::process(const MMInput& mm_inputs,
                                      MMData& mm_datas) {
   std::vector<torch::Tensor> images = mm_inputs.get_decode_data(MMType::IMAGE);
   if (images.empty()) {
@@ -43,7 +43,7 @@ bool MiniCPMVImageProcessor::process(const MMInput& mm_inputs,
   return true;
 }
 
-bool MiniCPMVImageProcessor::process_images(std::vector<torch::Tensor> images,
+bool MiniCPMVInputProcessor::process_images(std::vector<torch::Tensor> images,
                                             MMData& mm_datas) {
   std::vector<torch::Tensor> new_images;
   std::vector<torch::Tensor> tgt_sizes;
@@ -82,7 +82,7 @@ bool MiniCPMVImageProcessor::process_images(std::vector<torch::Tensor> images,
   return true;
 }
 
-bool MiniCPMVImageProcessor::process_image(
+bool MiniCPMVInputProcessor::process_image(
     torch::Tensor image,
     std::vector<torch::Tensor>& new_images,
     std::vector<torch::Tensor>& tgt_sizes) {
@@ -104,7 +104,7 @@ bool MiniCPMVImageProcessor::process_image(
   return true;
 }
 
-std::pair<int, int> MiniCPMVImageProcessor::find_best_resize(
+std::pair<int, int> MiniCPMVInputProcessor::find_best_resize(
     const std::pair<int, int>& original_size,
     int scale_resolution,
     int patch_size,
@@ -124,7 +124,7 @@ std::pair<int, int> MiniCPMVImageProcessor::find_best_resize(
   return {best_width, best_height};
 }
 
-std::pair<int, int> MiniCPMVImageProcessor::get_sliced_grid(
+std::pair<int, int> MiniCPMVInputProcessor::get_sliced_grid(
     const std::pair<int, int>& original_size,
     int max_slice_nums,
     int scale_resolution,
@@ -173,7 +173,7 @@ std::pair<int, int> MiniCPMVImageProcessor::get_sliced_grid(
 }
 
 std::vector<std::vector<torch::Tensor>>
-MiniCPMVImageProcessor::split_to_patches(
+MiniCPMVInputProcessor::split_to_patches(
     const torch::Tensor& image,
     const std::pair<int, int>& grid) const {
   int width = image.size(2);
@@ -199,7 +199,7 @@ MiniCPMVImageProcessor::split_to_patches(
   return patches;
 }
 
-std::pair<int, int> MiniCPMVImageProcessor::get_refine_size(
+std::pair<int, int> MiniCPMVInputProcessor::get_refine_size(
     const std::pair<int, int>& original_size,
     const std::pair<int, int>& grid,
     int scale_resolution,
@@ -224,7 +224,7 @@ std::pair<int, int> MiniCPMVImageProcessor::get_refine_size(
 std::tuple<torch::Tensor,
            std::vector<std::vector<torch::Tensor>>,
            std::pair<int, int>>
-MiniCPMVImageProcessor::slice_image(const torch::Tensor& image,
+MiniCPMVInputProcessor::slice_image(const torch::Tensor& image,
                                     int max_slice_nums,
                                     int scale_resolution,
                                     int patch_size,
@@ -258,7 +258,7 @@ MiniCPMVImageProcessor::slice_image(const torch::Tensor& image,
   return {source_image, patches, best_grid};
 }
 
-torch::Tensor MiniCPMVImageProcessor::reshape_by_patch(
+torch::Tensor MiniCPMVInputProcessor::reshape_by_patch(
     const torch::Tensor& image) {
   if (image.dim() != 3) {
     LOG(FATAL) << "Input must be a 3D tensor with shape [C, H, W].";
@@ -279,7 +279,7 @@ torch::Tensor MiniCPMVImageProcessor::reshape_by_patch(
   return reshaped;
 }
 
-std::vector<torch::Tensor> MiniCPMVImageProcessor::get_sliced_images(
+std::vector<torch::Tensor> MiniCPMVInputProcessor::get_sliced_images(
     const torch::Tensor& image,
     int max_slice_nums) {
   std::vector<torch::Tensor> slice_images;

@@ -20,14 +20,14 @@ limitations under the License.
 #include <vector>
 
 #include "core/util/tensor_helper.h"
-#include "image_processor.h"
+#include "multimodal_input_processor.h"
 
 namespace xllm {
 
-class MiniCPMVImageProcessor : public ImageProcessor {
+class MiniCPMVInputProcessor : public MultimodalInputProcessor {
  public:
-  MiniCPMVImageProcessor(const ModelArgs& args);
-  ~MiniCPMVImageProcessor() override = default;
+  MiniCPMVInputProcessor(const ModelArgs& args);
+  ~MiniCPMVInputProcessor() override = default;
 
   static std::pair<int, int> get_sliced_grid(
       const std::pair<int, int>& original_size,

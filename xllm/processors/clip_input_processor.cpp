@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "clip_image_processor.h"
+#include "clip_input_processor.h"
 
 namespace xllm {
 
-CLIPImageProcessor::CLIPImageProcessor(const ModelArgs& args) {
+CLIPInputProcessor::CLIPInputProcessor(const ModelArgs& args) {
   do_resize_ = args.mm_image_do_resize();
   do_center_crop_ = args.mm_image_do_center_crop();
   do_rescale_ = args.mm_image_do_rescale();
@@ -31,11 +31,11 @@ CLIPImageProcessor::CLIPImageProcessor(const ModelArgs& args) {
   image_std_ = args.mm_image_normalize_std();
 }
 
-bool CLIPImageProcessor::process(const MMInput& mm_inputs, MMData& mm_datas) {
+bool CLIPInputProcessor::process(const MMInput& mm_inputs, MMData& mm_datas) {
   return false;
 }
 
-torch::Tensor CLIPImageProcessor::process_images(const torch::Tensor& images) {
+torch::Tensor CLIPInputProcessor::process_images(const torch::Tensor& images) {
   int batch_size = images.size(0);
   std::vector<torch::Tensor> processed_images;
   auto size = get_resize_output_image_size(images[0], shortest_edge_);
@@ -65,7 +65,7 @@ torch::Tensor CLIPImageProcessor::process_images(const torch::Tensor& images) {
   return torch::stack(processed_images);
 }
 
-std::vector<int64_t> CLIPImageProcessor::get_resize_output_image_size(
+std::vector<int64_t> CLIPInputProcessor::get_resize_output_image_size(
     const torch::Tensor& image,
     int shortest_edge) {
   int height = image.size(1);

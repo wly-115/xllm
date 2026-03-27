@@ -23,9 +23,9 @@ limitations under the License.
 
 namespace xllm {
 
-class InputProcessor {
+class PromptProcessor {
  public:
-  virtual ~InputProcessor() = default;
+  virtual ~PromptProcessor() = default;
 
   virtual void process(std::string& prompt, const MMData& mm_data) = 0;
   virtual void find_mm_spans(const std::vector<int>& prompt, MMData& mm_data) {

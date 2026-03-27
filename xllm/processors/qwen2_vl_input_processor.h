@@ -19,14 +19,14 @@ limitations under the License.
 #include <unordered_map>
 #include <vector>
 
-#include "image_processor.h"
+#include "multimodal_input_processor.h"
 
 namespace xllm {
 
-class Glm4VImageProcessor : public ImageProcessor {
+class Qwen2VLInputProcessor : public MultimodalInputProcessor {
  public:
-  Glm4VImageProcessor(const ModelArgs&);
-  ~Glm4VImageProcessor() override = default;
+  Qwen2VLInputProcessor(const ModelArgs&);
+  ~Qwen2VLInputProcessor() override = default;
 
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
 
@@ -35,6 +35,11 @@ class Glm4VImageProcessor : public ImageProcessor {
   bool process_image(torch::Tensor image,
                      torch::Tensor& pixel_values,
                      torch::Tensor& thw);
+
+  bool process_images_embedding(
+      const std::vector<EmbeddingOutput>& images_embedding,
+      MMData& mm_datas);
+
   bool process_videos(std::vector<torch::Tensor> videos,
                       std::vector<VideoMetadata> video_meta_list,
                       MMData& mm_datas);
@@ -43,7 +48,11 @@ class Glm4VImageProcessor : public ImageProcessor {
                      torch::Tensor& pixel_values,
                      torch::Tensor& thw);
   torch::Tensor sample_frames(const VideoMetadata& metadata,
-                              int temporal_patch_size);
+                              int temporal_patch_size,
+                              int min_frames,
+                              int max_frames,
+                              int num_frames = -1,
+                              double set_fps = -1.0);
 
  private:
   bool do_convert_rgb_ = true;
@@ -61,21 +70,11 @@ class Glm4VImageProcessor : public ImageProcessor {
   int merge_size_ = 2;
   int patch_size_ = 14;
 
-  std::vector<double> video_mean_;
-  std::vector<double> video_std_;
-
-  int video_max_pixels_ = 47040000;
-  int video_min_pixels_ = 12544;
-
-  int video_merge_size_ = 2;
-  int video_patch_size_ = 14;
-
   int resample_ = 3;
   double rescale_factor_ = 0.00392156862745098;
 
   std::unordered_map<std::string, int> size_;
   int temporal_patch_size_ = 2;
-  int video_temporal_patch_size_ = 2;
 
   bool do_sample_frame_ = true;
 

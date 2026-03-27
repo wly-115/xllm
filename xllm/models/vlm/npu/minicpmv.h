@@ -30,16 +30,16 @@ limitations under the License.
 #include "core/layers/npu/npu_siglip_encoder_layer_impl.h"
 #include "models/llm/npu/qwen2.h"
 #include "models/model_registry.h"
-#include "processors/input_processor.h"
-#include "processors/minicpmv_image_processor.h"
-#include "processors/pywarpper_image_processor.h"
+#include "processors/minicpmv_input_processor.h"
+#include "processors/prompt_processor.h"
+#include "processors/pywarpper_input_processor.h"
 #include "xllm_atb_layers/core/include/atb_speed/log.h"
 
 namespace xllm::npu::model {
 
-class MiniCPMInputProcessor : public InputProcessor {
+class MiniCPMPromptProcessor : public PromptProcessor {
  public:
-  MiniCPMInputProcessor(const ModelArgs& args) {
+  MiniCPMPromptProcessor(const ModelArgs& args) {
     image_feature_size_ = args.mm_image_feature_size();
     max_slice_nums_ = args.vision_max_slice_nums();
     slice_mode_ = args.mm_slice_mode();
@@ -166,7 +166,7 @@ class MiniCPMInputProcessor : public InputProcessor {
 
     assert(max_slice_nums > 0);
 
-    auto grid = MiniCPMVImageProcessor::get_sliced_grid(
+    auto grid = MiniCPMVInputProcessor::get_sliced_grid(
         image_size, max_slice_nums, scale_resolution_);
 
     std::string image_placeholder = im_start_token_;
@@ -1272,8 +1272,9 @@ class MiniCPMV2_6Impl : public torch::nn::Module {
 TORCH_MODULE(MiniCPMV2_6);
 
 REGISTER_CAUSAL_VLM_MODEL(minicpmv, MiniCPMV2_6);
-REGISTER_INPUT_PROCESSOR(minicpmv, MiniCPMInputProcessor);
-REGISTER_IMAGE_PROCESSOR(minicpmv, MiniCPMVImageProcessor);
+REGISTER_MULTIMODAL_PROCESSOR(minicpmv,
+                              MiniCPMVInputProcessor,
+                              MiniCPMPromptProcessor);
 
 REGISTER_MODEL_ARGS(minicpmv, [&] {
   // text config

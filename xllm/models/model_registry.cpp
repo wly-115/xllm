@@ -241,29 +241,44 @@ void ModelRegistry::register_dit_model_factory(const std::string& name,
   }
 }
 
-void ModelRegistry::register_input_processor_factory(
+void ModelRegistry::register_prompt_processor_factory(
     const std::string& name,
-    InputProcessorFactory factory) {
+    PromptProcessorFactory factory) {
   ModelRegistry* instance = get_instance();
 
-  if (instance->model_registry_[name].input_processor_factory != nullptr) {
-    SAFE_LOG_WARNING("input processor factory for " << name
-                                                    << " already registered.");
+  if (instance->model_registry_[name].prompt_processor_factory != nullptr) {
+    SAFE_LOG_WARNING("prompt processor factory for " << name
+                                                     << " already registered.");
   } else {
-    instance->model_registry_[name].input_processor_factory = factory;
+    instance->model_registry_[name].prompt_processor_factory =
+        std::move(factory);
   }
 }
 
-void ModelRegistry::register_image_processor_factory(
+void ModelRegistry::register_mm_processor_factory(
     const std::string& name,
-    ImageProcessorFactory factory) {
+    MultimodalInputProcessorFactory factory) {
   ModelRegistry* instance = get_instance();
 
-  if (instance->model_registry_[name].image_processor_factory != nullptr) {
-    SAFE_LOG_WARNING("image processor factory for " << name
-                                                    << " already registered.");
+  if (instance->model_registry_[name].mm_processor_factory != nullptr) {
+    SAFE_LOG_WARNING("multimodal input processor factory for "
+                     << name << " already registered.");
   } else {
-    instance->model_registry_[name].image_processor_factory = factory;
+    instance->model_registry_[name].mm_processor_factory = std::move(factory);
+  }
+}
+
+void ModelRegistry::register_multimodal_processor_factory(
+    const std::string& name,
+    MultimodalProcessorFactory factory) {
+  ModelRegistry* instance = get_instance();
+
+  if (instance->model_registry_[name].multimodal_processor_factory != nullptr) {
+    SAFE_LOG_WARNING("multimodal processor factory for "
+                     << name << " already registered.");
+  } else {
+    instance->model_registry_[name].multimodal_processor_factory =
+        std::move(factory);
   }
 }
 
@@ -340,18 +355,47 @@ DiTModelFactory ModelRegistry::get_dit_model_factory(const std::string& name) {
   return instance->model_registry_[name].dit_model_factory;
 }
 
-InputProcessorFactory ModelRegistry::get_input_processor_factory(
+PromptProcessorFactory ModelRegistry::get_prompt_processor_factory(
     const std::string& name) {
   ModelRegistry* instance = get_instance();
 
-  return instance->model_registry_[name].input_processor_factory;
+  return instance->model_registry_[name].prompt_processor_factory;
 }
 
-ImageProcessorFactory ModelRegistry::get_image_processor_factory(
+MultimodalInputProcessorFactory ModelRegistry::get_mm_processor_factory(
     const std::string& name) {
   ModelRegistry* instance = get_instance();
 
-  return instance->model_registry_[name].image_processor_factory;
+  return instance->model_registry_[name].mm_processor_factory;
+}
+
+MultimodalProcessorFactory ModelRegistry::get_multimodal_processor_factory(
+    const std::string& name) {
+  ModelRegistry* instance = get_instance();
+  const auto& meta = instance->model_registry_[name];
+  if (meta.multimodal_processor_factory != nullptr) {
+    return meta.multimodal_processor_factory;
+  }
+  if (meta.mm_processor_factory == nullptr &&
+      meta.prompt_processor_factory == nullptr) {
+    return nullptr;
+  }
+
+  auto mm_processor_factory = meta.mm_processor_factory;
+  auto prompt_processor_factory = meta.prompt_processor_factory;
+  return
+      [mm_processor_factory, prompt_processor_factory](const ModelArgs& args) {
+        std::unique_ptr<MultimodalInputProcessor> mm_processor;
+        std::unique_ptr<PromptProcessor> prompt_processor;
+        if (mm_processor_factory != nullptr) {
+          mm_processor = mm_processor_factory(args);
+        }
+        if (prompt_processor_factory != nullptr) {
+          prompt_processor = prompt_processor_factory(args);
+        }
+        return std::make_unique<MultimodalProcessor>(
+            std::move(mm_processor), std::move(prompt_processor));
+      };
 }
 
 ModelArgsLoader ModelRegistry::get_model_args_loader(const std::string& name) {

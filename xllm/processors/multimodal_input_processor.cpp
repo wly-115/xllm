@@ -13,14 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "clip_image_processor.h"
+#include "multimodal_input_processor.h"
 
 namespace xllm {
 
-torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
-                                     const std::vector<int64_t>& size,
-                                     int resample,
-                                     bool antialias) {
+torch::Tensor MultimodalInputProcessor::resize(const torch::Tensor& image,
+                                               const std::vector<int64_t>& size,
+                                               int resample,
+                                               bool antialias) {
   if (image.dim() != 3) {
     LOG(FATAL) << "Input image must be a 3D tensor (C x H x W).";
   }
@@ -47,8 +47,9 @@ torch::Tensor ImageProcessor::resize(const torch::Tensor& image,
       .to(torch::kUInt8);
 }
 
-torch::Tensor ImageProcessor::centerCrop(const torch::Tensor& image,
-                                         const std::pair<int, int>& cropSize) {
+torch::Tensor MultimodalInputProcessor::centerCrop(
+    const torch::Tensor& image,
+    const std::pair<int, int>& cropSize) {
   if (image.dim() != 3) {
     LOG(FATAL)
         << "Input image must be a 3-dimensional tensor in (C, H, W) format.";
@@ -93,14 +94,15 @@ torch::Tensor ImageProcessor::centerCrop(const torch::Tensor& image,
                             torch::indexing::Slice(left, right)});
 }
 
-torch::Tensor ImageProcessor::rescale(const torch::Tensor& image,
-                                      double scale) {
+torch::Tensor MultimodalInputProcessor::rescale(const torch::Tensor& image,
+                                                double scale) {
   return image * scale;
 }
 
-torch::Tensor ImageProcessor::normalize(const torch::Tensor& image,
-                                        const std::vector<double>& mean,
-                                        const std::vector<double>& std) {
+torch::Tensor MultimodalInputProcessor::normalize(
+    const torch::Tensor& image,
+    const std::vector<double>& mean,
+    const std::vector<double>& std) {
   if (image.dim() != 3) {
     LOG(FATAL)
         << "Input image must be a 3-dimensional tensor in (C, H, W) format.";

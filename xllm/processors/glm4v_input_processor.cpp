@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "glm4v_image_processor.h"
+#include "glm4v_input_processor.h"
 
 namespace xllm {
 
@@ -77,7 +77,7 @@ std::optional<Size> smart_resize(int num_frames,
 }
 }  // namespace
 
-torch::Tensor Glm4VImageProcessor::sample_frames(const VideoMetadata& metadata,
+torch::Tensor Glm4VInputProcessor::sample_frames(const VideoMetadata& metadata,
                                                  int temporal_patch_size) {
   // video: [T, C, H, W]
   const int total_frames = metadata.total_num_frames;
@@ -188,7 +188,7 @@ torch::Tensor Glm4VImageProcessor::sample_frames(const VideoMetadata& metadata,
   return torch::tensor(uniq, torch::TensorOptions().dtype(torch::kLong));
 }
 
-Glm4VImageProcessor::Glm4VImageProcessor(const ModelArgs& args) {
+Glm4VInputProcessor::Glm4VInputProcessor(const ModelArgs& args) {
   image_mean_ = args.mm_image_normalize_mean();
   image_std_ = args.mm_image_normalize_std();
 
@@ -239,7 +239,7 @@ Glm4VImageProcessor::Glm4VImageProcessor(const ModelArgs& args) {
   }
 }
 
-bool Glm4VImageProcessor::process(const MMInput& inputs, MMData& datas) {
+bool Glm4VInputProcessor::process(const MMInput& inputs, MMData& datas) {
   std::vector<torch::Tensor> images = inputs.get_decode_data(MMType::IMAGE);
   std::vector<torch::Tensor> videos = inputs.get_decode_data(MMType::VIDEO);
   std::vector<VideoMetadata> video_meta_list = inputs.get_video_metadata();
@@ -266,7 +266,7 @@ bool Glm4VImageProcessor::process(const MMInput& inputs, MMData& datas) {
   return true;
 }
 
-bool Glm4VImageProcessor::process_images(std::vector<torch::Tensor> images,
+bool Glm4VInputProcessor::process_images(std::vector<torch::Tensor> images,
                                          MMData& mm_datas) {
   torch::Tensor pixel_values;
   torch::Tensor thw;
@@ -286,7 +286,7 @@ bool Glm4VImageProcessor::process_images(std::vector<torch::Tensor> images,
   return true;
 }
 
-bool Glm4VImageProcessor::process_image(torch::Tensor image,
+bool Glm4VInputProcessor::process_image(torch::Tensor image,
                                         torch::Tensor& pixel_values,
                                         torch::Tensor& thw) {
   auto shape = image.sizes();
@@ -357,7 +357,7 @@ bool Glm4VImageProcessor::process_image(torch::Tensor image,
   return true;
 }
 
-bool Glm4VImageProcessor::process_videos(
+bool Glm4VInputProcessor::process_videos(
     std::vector<torch::Tensor> videos,
     std::vector<VideoMetadata> video_meta_list,
     MMData& mm_datas) {
@@ -384,7 +384,7 @@ bool Glm4VImageProcessor::process_videos(
   return true;
 }
 
-bool Glm4VImageProcessor::process_video(torch::Tensor origin_video,
+bool Glm4VInputProcessor::process_video(torch::Tensor origin_video,
                                         VideoMetadata& metadata,
                                         torch::Tensor& pixel_values,
                                         torch::Tensor& thw) {

@@ -30,15 +30,15 @@ limitations under the License.
 #include "core/layers/npu/npu_rms_norm_impl.h"
 #include "models/llm/npu/qwen2.h"
 #include "models/model_registry.h"
-#include "processors/input_processor.h"
-#include "processors/qwen2_vl_image_processor.h"
+#include "processors/prompt_processor.h"
+#include "processors/qwen2_vl_input_processor.h"
 #include "xllm_atb_layers/core/include/atb_speed/log.h"
 
 namespace xllm::npu::model {
 
 #define PrintTensor(tensor) print_tensor(tensor, #tensor, 10, true, false);
 
-class Qwen2_5_VLInputProcessor : public InputProcessor {
+class Qwen2_5_VLPromptProcessor : public PromptProcessor {
   enum class TokenType {
     INVALID,
     IMAGE,
@@ -46,7 +46,7 @@ class Qwen2_5_VLInputProcessor : public InputProcessor {
   };
 
  public:
-  Qwen2_5_VLInputProcessor(const ModelArgs& args) {
+  Qwen2_5_VLPromptProcessor(const ModelArgs& args) {
     merge_size_ = args.mm_image_merge_size();
     vision_start_token_id_ = args.vision_start_token_id();
     vision_end_token_id_ = args.vision_end_token_id();
@@ -880,9 +880,10 @@ class Qwen2_5_VLForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(Qwen2_5_VLForConditionalGeneration);
 
-REGISTER_INPUT_PROCESSOR(qwen2_5_vl, Qwen2_5_VLInputProcessor);
+REGISTER_MULTIMODAL_PROCESSOR(qwen2_5_vl,
+                              Qwen2VLInputProcessor,
+                              Qwen2_5_VLPromptProcessor);
 REGISTER_CAUSAL_VLM_MODEL(qwen2_5_vl, Qwen2_5_VLForConditionalGeneration);
-REGISTER_IMAGE_PROCESSOR(qwen2_5_vl, Qwen2VLImageProcessor);
 
 REGISTER_MODEL_ARGS(qwen2_5_vl, [&] {
   // text config

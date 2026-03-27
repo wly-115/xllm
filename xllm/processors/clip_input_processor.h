@@ -15,20 +15,38 @@ limitations under the License.
 
 #pragma once
 
+#include <torch/torch.h>
+
 #include <vector>
 
-#include "image_processor.h"
+#include "core/util/tensor_helper.h"
+#include "multimodal_input_processor.h"
 
 namespace xllm {
 
-struct MMData;
-
-class PyWarpperImageProcessor : public ImageProcessor {
+class CLIPInputProcessor : public MultimodalInputProcessor {
  public:
-  PyWarpperImageProcessor(const ModelArgs&);
-  ~PyWarpperImageProcessor() override = default;
+  CLIPInputProcessor(const ModelArgs& args);
+  ~CLIPInputProcessor() override = default;
 
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
+  torch::Tensor process_images(const torch::Tensor& images);
+
+ private:
+  std::vector<int64_t> get_resize_output_image_size(const torch::Tensor& image,
+                                                    int shortest_edge);
+
+ private:
+  bool do_resize_;
+  bool do_center_crop_;
+  bool do_rescale_;
+  bool do_normalize_;
+  int shortest_edge_;
+  int resample_;
+  double rescale_factor_;
+  std::pair<int, int> crop_size_;
+  std::vector<double> image_mean_;
+  std::vector<double> image_std_;
 };
 
 }  // namespace xllm

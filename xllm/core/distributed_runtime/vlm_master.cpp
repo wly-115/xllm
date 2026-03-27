@@ -85,24 +85,13 @@ VLMMaster::VLMMaster(const Options& options)
   chat_template_ =
       std::make_unique<JinjaChatTemplate>(engine_->tokenizer_args());
 
-  // create input processor
-  auto input_processor_factory =
-      ModelRegistry::get_input_processor_factory(model_args_.model_type());
-  if (input_processor_factory == nullptr) {
-    LOG(ERROR) << "No input processor defined for model type: "
+  auto multimodal_processor_factory =
+      ModelRegistry::get_multimodal_processor_factory(model_args_.model_type());
+  if (multimodal_processor_factory == nullptr) {
+    LOG(ERROR) << "No multimodal processor defined for model type: "
                << model_args_.model_type();
   } else {
-    input_processor_ = input_processor_factory(model_args_);
-  }
-
-  // create image processor
-  auto image_processor_factory =
-      ModelRegistry::get_image_processor_factory(model_args_.model_type());
-  if (image_processor_factory == nullptr) {
-    LOG(ERROR) << "No image processor defined for model type: "
-               << model_args_.model_type();
-  } else {
-    image_processor_ = image_processor_factory(model_args_);
+    multimodal_processor_ = multimodal_processor_factory(model_args_);
   }
 
   // construct tokenizer and handling threads
@@ -238,7 +227,7 @@ void VLMMaster::handle_batch_request_with_image_urls(
     if (!build_mm_data_from_image_urls(image_urls[i], mm_data)) {
       callback(i,
                RequestOutput(Status{StatusCode::INVALID_ARGUMENT,
-                                    "Image processor process failed."}));
+                                    "Multimodal processor process failed."}));
       continue;
     }
 
@@ -315,7 +304,12 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
     return nullptr;
   }
   Timer timer;
-  input_processor_->process(prompt, mm_data);
+  if (multimodal_processor_ == nullptr) {
+    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
+                        "No multimodal processor defined for model type");
+    return nullptr;
+  }
+  multimodal_processor_->process_prompt(prompt, mm_data);
 
   std::vector<int> prompt_tokens;
   if (!tokenizer_->encode(prompt, &prompt_tokens)) {
@@ -324,7 +318,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
                         "Failed to encode prompt");
     return nullptr;
   }
-  input_processor_->find_mm_spans(prompt_tokens, mm_data);
+  multimodal_processor_->find_mm_spans(prompt_tokens, mm_data);
 
   COUNTER_ADD(tokenization_latency_seconds, timer.elapsed_seconds());
 
@@ -445,10 +439,12 @@ std::shared_ptr<Request> VLMMaster::generate_request(
   }
 
   MMData mm_data;
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << " image processor process failed.";
+  if (!mm_inputs.empty() &&
+      (multimodal_processor_ == nullptr ||
+       !multimodal_processor_->process_mm_input(mm_inputs, mm_data))) {
+    LOG(ERROR) << "multimodal processor process failed.";
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "Image processor process failed.");
+                        "Multimodal processor process failed.");
     return nullptr;
   }
 
@@ -490,8 +486,10 @@ bool VLMMaster::build_mm_data_from_image_urls(
     return false;
   }
 
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << "image processor process failed.";
+  if (!mm_inputs.empty() &&
+      (multimodal_processor_ == nullptr ||
+       !multimodal_processor_->process_mm_input(mm_inputs, mm_data))) {
+    LOG(ERROR) << "multimodal processor process failed.";
     return false;
   }
 

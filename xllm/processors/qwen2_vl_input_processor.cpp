@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "qwen2_vl_image_processor.h"
+#include "qwen2_vl_input_processor.h"
 
 namespace xllm {
 
@@ -60,7 +60,7 @@ std::optional<Size> smart_resize(int height,
 }
 }  // namespace
 
-torch::Tensor Qwen2VLImageProcessor::sample_frames(
+torch::Tensor Qwen2VLInputProcessor::sample_frames(
     const VideoMetadata& metadata,
     int temporal_patch_size,
     int min_frames,
@@ -126,7 +126,7 @@ torch::Tensor Qwen2VLImageProcessor::sample_frames(
   }
 }
 
-Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
+Qwen2VLInputProcessor::Qwen2VLInputProcessor(const ModelArgs& args) {
   image_mean_ = args.mm_image_normalize_mean();
   image_std_ = args.mm_image_normalize_std();
   if (args.mm_image_max_pixels() && args.mm_image_min_pixels()) {
@@ -156,7 +156,7 @@ Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
   }
 }
 
-bool Qwen2VLImageProcessor::process(const MMInput& inputs, MMData& datas) {
+bool Qwen2VLInputProcessor::process(const MMInput& inputs, MMData& datas) {
   for (const auto& input_item : inputs) {
     std::vector<torch::Tensor> images;
     std::vector<EmbeddingInput> images_embedding;
@@ -212,7 +212,7 @@ bool Qwen2VLImageProcessor::process(const MMInput& inputs, MMData& datas) {
   return true;
 }
 
-bool Qwen2VLImageProcessor::process_images_embedding(
+bool Qwen2VLInputProcessor::process_images_embedding(
     const std::vector<EmbeddingOutput>& images_embedding,
     MMData& mm_datas) {
   for (auto& output : images_embedding) {
@@ -232,7 +232,7 @@ bool Qwen2VLImageProcessor::process_images_embedding(
   return true;
 }
 
-bool Qwen2VLImageProcessor::process_images(std::vector<torch::Tensor> images,
+bool Qwen2VLInputProcessor::process_images(std::vector<torch::Tensor> images,
                                            MMData& mm_datas) {
   torch::Tensor pixel_values;
   torch::Tensor thw;
@@ -252,7 +252,7 @@ bool Qwen2VLImageProcessor::process_images(std::vector<torch::Tensor> images,
   return true;
 }
 
-bool Qwen2VLImageProcessor::process_image(torch::Tensor image,
+bool Qwen2VLInputProcessor::process_image(torch::Tensor image,
                                           torch::Tensor& pixel_values,
                                           torch::Tensor& thw) {
   auto shape = image.sizes();
@@ -322,7 +322,7 @@ bool Qwen2VLImageProcessor::process_image(torch::Tensor image,
   return true;
 }
 
-bool Qwen2VLImageProcessor::process_videos(
+bool Qwen2VLInputProcessor::process_videos(
     std::vector<torch::Tensor> videos,
     std::vector<VideoMetadata> video_meta_list,
     MMData& mm_datas) {
@@ -358,7 +358,7 @@ bool Qwen2VLImageProcessor::process_videos(
   return true;
 }
 
-bool Qwen2VLImageProcessor::process_video(torch::Tensor origin_video,
+bool Qwen2VLInputProcessor::process_video(torch::Tensor origin_video,
                                           VideoMetadata& metadata,
                                           torch::Tensor& pixel_values,
                                           torch::Tensor& thw) {

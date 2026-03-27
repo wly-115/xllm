@@ -25,9 +25,9 @@ limitations under the License.
 
 namespace xllm {
 
-class ImageProcessor {
+class MultimodalInputProcessor {
  public:
-  virtual ~ImageProcessor() = default;
+  virtual ~MultimodalInputProcessor() = default;
 
   virtual bool process(const MMInput& mm_inputs, MMData& mm_datas) = 0;
   virtual torch::Tensor resize(const torch::Tensor& image,
