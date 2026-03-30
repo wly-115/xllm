@@ -13,24 +13,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "processors/qwen2_5_vl_prompt_processor.h"
+#include "processors/models/clip_prompt_processor.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cstdint>
 
 namespace xllm {
 
-Qwen2_5_VLPromptProcessor::Qwen2_5_VLPromptProcessor(const ModelArgs& args) {
+CLIPVLPromptProcessor::CLIPVLPromptProcessor(const ModelArgs& args) {
   merge_size_ = args.mm_image_merge_size();
-  vision_start_token_id_ = args.vision_start_token_id();
-  vision_end_token_id_ = args.vision_end_token_id();
-  image_token_id_ = args.image_token_id();
-  video_token_id_ = args.video_token_id();
 }
 
-void Qwen2_5_VLPromptProcessor::process(std::string& prompt,
-                                        const MMData& mm_data) {
+void CLIPVLPromptProcessor::process(std::string& prompt,
+                                    const MMData& mm_data) {
   torch::Tensor image_grid_thw;
   if (auto res = mm_data.get<torch::Tensor>("image_grid_thw"))
     image_grid_thw = res.value();
@@ -98,38 +93,9 @@ void Qwen2_5_VLPromptProcessor::process(std::string& prompt,
   prompt = std::move(data);
 }
 
-void Qwen2_5_VLPromptProcessor::find_mm_spans(
-    const std::vector<int32_t>& prompt,
-    MMData& mm_data) {
-  auto start = prompt.begin();
-  uint32_t global_mm_index = 0;
-  uint32_t offset = 0;
-  uint32_t length = 0;
-  auto& mm_items = mm_data.items<MMItemVec>();
-  while (true) {
-    auto vision_start_it =
-        std::find(start, prompt.end(), vision_start_token_id_);
-    auto vision_end_it = std::find(start, prompt.end(), vision_end_token_id_);
-    if (vision_start_it == prompt.end()) {
-      break;
-    }
-    offset = std::distance(prompt.begin(), vision_start_it);
-    length = std::distance(vision_start_it + 1, vision_end_it);
-
-    auto& item = mm_items[global_mm_index];
-    if (*(vision_start_it + 1) == image_token_id_) {
-      item.mutable_state().mutable_token_pos() = {offset + 1, length};
-    } else if (*(vision_start_it + 1) == video_token_id_) {
-      item.mutable_state().mutable_token_pos() = {offset + 1, length};
-    }
-    ++global_mm_index;
-    start = std::next(vision_end_it);
-  }
-}
-
-std::pair<Qwen2_5_VLPromptProcessor::TokenType, size_t>
-Qwen2_5_VLPromptProcessor::find_vision_token(const std::string& prompt,
-                                             size_t begin) {
+std::pair<CLIPVLPromptProcessor::TokenType, size_t>
+CLIPVLPromptProcessor::find_vision_token(const std::string& prompt,
+                                         size_t begin) {
   auto img_pos = prompt.find(image_token_, begin);
   auto vid_pos = prompt.find(video_token_, begin);
 

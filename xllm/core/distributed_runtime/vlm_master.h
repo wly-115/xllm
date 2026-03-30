@@ -34,7 +34,7 @@ limitations under the License.
 #include "framework/request/request_params.h"
 #include "master.h"
 #include "scheduler/continuous_scheduler.h"
-#include "xllm/processors/multimodal_processor.h"
+#include "xllm/processors/core/multimodal_processor.h"
 
 namespace xllm {
 

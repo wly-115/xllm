@@ -13,14 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "processors/minicpmv_prompt_processor.h"
+#include "processors/models/minicpmv_prompt_processor.h"
 
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <regex>
 
-#include "processors/minicpmv_input_processor.h"
+#include "processors/models/minicpmv_input_processor.h"
 
 namespace xllm::npu::model {
 

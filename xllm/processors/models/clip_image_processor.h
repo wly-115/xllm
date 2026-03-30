@@ -15,37 +15,36 @@ limitations under the License.
 
 #pragma once
 
+#include <torch/torch.h>
+
 #include <cstdint>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "core/framework/model/model_args.h"
-#include "processors/prompt_processor.h"
-
 namespace xllm {
 
-class CLIPVLPromptProcessor : public PromptProcessor {
-  enum class TokenType {
-    INVALID,
-    IMAGE,
-    VIDEO,
-  };
-
+class CLIPImageProcessor {
  public:
-  explicit CLIPVLPromptProcessor(const ModelArgs& args);
+  explicit CLIPImageProcessor(const ModelArgs& args);
 
-  void process(std::string& prompt, const MMData& mm_data) override;
-  void find_mm_spans(const std::vector<int32_t>& prompt,
-                     MMData& mm_data) override {}
+  torch::Tensor process_images(const torch::Tensor& images) const;
 
  private:
-  std::pair<TokenType, size_t> find_vision_token(const std::string& prompt,
-                                                 size_t begin);
+  std::vector<int64_t> get_resize_output_image_size(
+      const torch::Tensor& image,
+      int32_t shortest_edge) const;
 
-  const std::string image_token_ = "<|image_pad|>";
-  const std::string video_token_ = "<|video_pad|>";
-  int32_t merge_size_ = 0;
+ private:
+  bool do_resize_;
+  bool do_center_crop_;
+  bool do_rescale_;
+  bool do_normalize_;
+  int32_t shortest_edge_;
+  int32_t resample_;
+  double rescale_factor_;
+  std::pair<int32_t, int32_t> crop_size_;
+  std::vector<double> image_mean_;
+  std::vector<double> image_std_;
 };
 
 }  // namespace xllm

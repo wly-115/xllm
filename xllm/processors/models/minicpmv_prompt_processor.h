@@ -22,7 +22,7 @@ limitations under the License.
 #include <vector>
 
 #include "core/framework/model/model_args.h"
-#include "processors/prompt_processor.h"
+#include "processors/core/prompt_processor.h"
 
 namespace xllm::npu::model {
 

@@ -1,4 +1,4 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,7 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "glm4v_input_processor.h"
+#include "processors/models/glm4v_video_processor.h"
+
+#include <unordered_set>
+
+#include "processors/common/transforms.h"
 
 namespace xllm {
 
@@ -75,24 +79,47 @@ std::optional<Size> smart_resize(int32_t num_frames,
 
   return std::make_pair(h_bar, w_bar);
 }
+
 }  // namespace
 
-torch::Tensor Glm4VInputProcessor::sample_frames(const VideoMetadata& metadata,
-                                                 int32_t temporal_patch_size) {
-  // video: [T, C, H, W]
+Glm4VVideoProcessor::Glm4VVideoProcessor(const ModelArgs& args) {
+  video_mean_ = args.mm_video_normalize_mean();
+  video_std_ = args.mm_video_normalize_std();
+
+  video_min_pixels_ = args.mm_video_shortest_edge();
+  video_max_pixels_ = args.mm_video_longest_edge();
+
+  video_patch_size_ = args.mm_video_patch_size();
+  video_temporal_patch_size_ = args.mm_video_temporal_patch_size();
+  video_merge_size_ = args.mm_video_merge_size();
+
+  if (do_rescale_ && do_normalize_) {
+    for (auto& item : video_mean_) {
+      item = item * (1.0 / rescale_factor_);
+    }
+
+    for (auto& item : video_std_) {
+      item = item * (1.0 / rescale_factor_);
+    }
+
+    do_rescale_ = false;
+  }
+}
+
+torch::Tensor Glm4VVideoProcessor::sample_frames(
+    const VideoMetadata& metadata,
+    int32_t temporal_patch_size) const {
   const int32_t total_frames = metadata.total_num_frames;
   if (total_frames <= 0) {
     return torch::empty({0}, torch::dtype(torch::kLong));
   }
 
   if (metadata.fps <= 0.0) {
-    LOG(ERROR) << "invalid metadata.fps <= 0";
-    return torch::Tensor();
+    LOG(FATAL) << "invalid metadata.fps <= 0";
   }
 
   const int32_t max_frame_idx = total_frames - 1;
 
-  // duration = metadata.duration or round(max_idx / fps) + 1
   double duration = metadata.duration;
   if (duration <= 0.0) {
     duration =
@@ -116,7 +143,6 @@ torch::Tensor Glm4VInputProcessor::sample_frames(const VideoMetadata& metadata,
     target_fps = DYN_FPS_2400;
   }
 
-  // extract_t = int(effective_duration * target_fps * temporal_patch_size)
   int32_t extract_t =
       static_cast<int32_t>(effective_duration * target_fps *
                            static_cast<double>(temporal_patch_size));
@@ -141,7 +167,7 @@ torch::Tensor Glm4VInputProcessor::sample_frames(const VideoMetadata& metadata,
     const double inv_fps =
         1.0 / (static_cast<double>(temporal_patch_size) * target_fps);
 
-    for (int32_t frame_index = 0; frame_index < total_frames; ++frame_index) {
+    for (int32_t frame_index = 0; frame_index < total_frames; frame_index++) {
       if (timestamps[frame_index] >= current_second) {
         current_second += inv_fps;
         tmp.push_back(frame_index);
@@ -190,220 +216,21 @@ torch::Tensor Glm4VInputProcessor::sample_frames(const VideoMetadata& metadata,
   return torch::tensor(uniq, torch::TensorOptions().dtype(torch::kLong));
 }
 
-Glm4VInputProcessor::Glm4VInputProcessor(const ModelArgs& args) {
-  image_mean_ = args.mm_image_normalize_mean();
-  image_std_ = args.mm_image_normalize_std();
-
-  if (args.mm_image_max_pixels() && args.mm_image_min_pixels()) {
-    min_pixels_ = args.mm_image_min_pixels();
-    max_pixels_ = args.mm_image_max_pixels();
-  } else if (args.mm_image_shortest_edge() && args.mm_image_longest_edge()) {
-    min_pixels_ = args.mm_image_shortest_edge();
-    max_pixels_ = args.mm_image_longest_edge();
-  }
-
-  patch_size_ = args.mm_image_patch_size();
-  temporal_patch_size_ = args.mm_image_temporal_patch_size();
-
-  merge_size_ = args.mm_image_merge_size();
-
-  video_mean_ = args.mm_video_normalize_mean();
-  video_std_ = args.mm_video_normalize_std();
-
-  video_min_pixels_ = args.mm_video_shortest_edge();
-  video_max_pixels_ = args.mm_video_longest_edge();
-
-  video_patch_size_ = args.mm_video_patch_size();
-  video_temporal_patch_size_ = args.mm_video_temporal_patch_size();
-  video_merge_size_ = args.mm_video_merge_size();
-
-  size_ = {{"longest_edge", 12845056}, {"shortest_edge", 3136}};
-
-  // fuse image mean/std and rescale_factor
-  if (do_rescale_ && do_normalize_) {
-    for (auto& item : image_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : image_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : video_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : video_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    do_rescale_ = false;
-  }
-}
-
-bool Glm4VInputProcessor::process(const MMInput& inputs, MMData& datas) {
-  std::vector<torch::Tensor> images = inputs.get_decode_data(MMType::IMAGE);
-  std::vector<torch::Tensor> videos = inputs.get_decode_data(MMType::VIDEO);
-  std::vector<VideoMetadata> video_meta_list = inputs.get_video_metadata();
-
-  if (images.empty() && (videos.empty() || video_meta_list.empty())) {
-    LOG(ERROR) << "no image/video tensor found.";
-    return false;
-  }
-
-  if (!images.empty()) {
-    if (!this->process_images(images, datas)) {
-      LOG(ERROR) << " process image failed.";
-      return false;
-    }
-  }
-
-  if (!videos.empty()) {
-    if (!this->process_videos(videos, video_meta_list, datas)) {
-      LOG(ERROR) << " process video failed.";
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool Glm4VInputProcessor::process_images(std::vector<torch::Tensor> images,
-                                         MMData& mm_datas) {
-  torch::Tensor pixel_values;
-  torch::Tensor thw;
-
-  for (const auto& img : images) {
-    if (!this->process_image(img, pixel_values, thw)) {
-      LOG(ERROR)
-          << "Failed to process image. The shape(channels, height, width) is: "
-          << img.sizes();
-      return false;
-    }
-
-    auto& item = mm_datas.add(MMType::IMAGE);
-    item.set_data({{"pixel_values", pixel_values}, {"image_grid_thw", thw}});
-  }
-
-  return true;
-}
-
-bool Glm4VInputProcessor::process_image(torch::Tensor image,
-                                        torch::Tensor& pixel_values,
-                                        torch::Tensor& thw) {
-  auto shape = image.sizes();
-
-  auto resized_height = shape[1];
-  auto resized_width = shape[2];
-
-  // do_convert_rgb
-
-  // resize
-  if (do_resize_) {
-    auto size = smart_resize(temporal_patch_size_,
-                             resized_height,
-                             resized_width,
-                             temporal_patch_size_,
-                             patch_size_ * merge_size_,
-                             min_pixels_,
-                             max_pixels_);
-    if (!size) {
-      return false;
-    }
-
-    std::tie(resized_height, resized_width) = *size;
-    image =
-        this->resize(image, {resized_height, resized_width}, resample_, true);
-  }
-
-  // normalize
-  if (do_normalize_) {
-    image = this->normalize(image, image_mean_, image_std_);
-  }
-
-  // rescale
-  if (do_rescale_) {
-    image = this->rescale(image, rescale_factor_);
-  }
-
-  auto patches = torch::stack({image}, 0);
-
-  auto repeats = patches[-1].unsqueeze(0).repeat(
-      /*{temporal_patch_size_ - (shape[0] % temporal_patch_size_)*/ {
-          temporal_patch_size_ - 1, 1, 1, 1});
-  patches = torch::cat({patches, repeats}, 0);
-  shape = patches.sizes();
-  auto channel = shape[1];
-  auto grid_t = shape[0] / temporal_patch_size_;
-
-  auto grid_h = resized_height / patch_size_;
-  auto grid_w = resized_width / patch_size_;
-
-  patches = patches.view({grid_t,
-                          temporal_patch_size_,
-                          channel,
-                          grid_h / merge_size_,
-                          merge_size_,
-                          patch_size_,
-                          grid_w / merge_size_,
-                          merge_size_,
-                          patch_size_});
-  patches = patches.permute({0, 3, 6, 4, 7, 2, 1, 5, 8});
-  patches = patches.reshape(
-      {grid_t * grid_h * grid_w,
-       channel * temporal_patch_size_ * patch_size_ * patch_size_});
-
-  pixel_values = patches;
-  thw = torch::tensor({grid_t, grid_h, grid_w}).clone().reshape({-1, 3});
-
-  return true;
-}
-
-bool Glm4VInputProcessor::process_videos(
-    std::vector<torch::Tensor> videos,
-    std::vector<VideoMetadata> video_meta_list,
-    MMData& mm_datas) {
-  torch::Tensor pixel_values;
-  torch::Tensor thw;
-
-  const size_t video_size = videos.size();
-  for (size_t i = 0; i < video_size; ++i) {
-    auto& vid = videos[i];
-    auto& metadata = video_meta_list[i];
-    if (!this->process_video(vid, metadata, pixel_values, thw)) {
-      LOG(ERROR) << "Failed to process video. The shape(num_frames, channels, "
-                    "height, width) is: "
-                 << vid.sizes();
-      return false;
-    }
-
-    auto& item = mm_datas.add(MMType::VIDEO);
-    item.set_data(
-        {{"pixel_values_videos", pixel_values}, {"video_grid_thw", thw}});
-    item.set_metadata(metadata);
-  }
-
-  return true;
-}
-
-bool Glm4VInputProcessor::process_video(torch::Tensor origin_video,
-                                        VideoMetadata& metadata,
-                                        torch::Tensor& pixel_values,
-                                        torch::Tensor& thw) {
+bool Glm4VVideoProcessor::process(torch::Tensor origin_video,
+                                  VideoMetadata& metadata,
+                                  torch::Tensor& pixel_values,
+                                  torch::Tensor& thw) const {
   if (origin_video.dim() != 4) {
-    LOG(ERROR) << "video must be TCHW";
-    return false;
+    LOG(FATAL) << "video must be TCHW";
   }
 
   torch::Tensor indices;
   if (do_sample_frame_) {
-    indices = this->sample_frames(metadata, video_temporal_patch_size_);
-    if (!indices.defined()) {
-      return false;
-    }
+    indices = sample_frames(metadata, video_temporal_patch_size_);
   } else {
-    indices = torch::arange(
-        0, origin_video.size(0), torch::TensorOptions().dtype(torch::kLong));
+    indices = torch::arange(0,
+                            static_cast<int64_t>(origin_video.size(0)),
+                            torch::TensorOptions().dtype(torch::kLong));
   }
   auto video = origin_video.index_select(/*dim=*/0, indices);
   int64_t sampled_total_frames = video.size(0);
@@ -425,8 +252,8 @@ bool Glm4VInputProcessor::process_video(torch::Tensor origin_video,
   }
 
   auto shape = video.sizes();
-  auto time_len = shape[0];
   auto channel = shape[1];
+  auto time_len = shape[0];
   auto resized_height = shape[2];
   auto resized_width = shape[3];
 
@@ -445,28 +272,30 @@ bool Glm4VInputProcessor::process_video(torch::Tensor origin_video,
   }
 
   std::vector<torch::Tensor> out_frames;
-  out_frames.reserve(time_len);
-  // for each frame
+  out_frames.reserve(video.size(0));
   auto frames = video.unbind(0);
-
   for (auto& frame : frames) {
-    // resize
-    if (do_resize_)
-      frame =
-          this->resize(frame, {resized_height, resized_width}, resample_, true);
-    // normalize
-    if (do_normalize_) frame = this->normalize(frame, video_mean_, video_std_);
-    // rescale
-    if (do_rescale_) frame = this->rescale(frame, rescale_factor_);
+    if (do_resize_) {
+      frame = transforms::resize(
+          frame, {resized_height, resized_width}, resample_, true);
+    }
+    if (do_normalize_) {
+      frame = transforms::normalize(frame, video_mean_, video_std_);
+    }
+    if (do_rescale_) {
+      frame = transforms::rescale(frame, rescale_factor_);
+    }
     out_frames.push_back(frame);
   }
 
-  auto out_video = torch::stack(out_frames);  // [T,C,H,W]
-
-  if (out_video.size(0) % video_temporal_patch_size_) {
-    auto last = out_video.index({time_len - 1})
+  auto out_video = torch::stack(out_frames);
+  auto pad_t = (video_temporal_patch_size_ -
+                (out_video.size(0) % video_temporal_patch_size_)) %
+               video_temporal_patch_size_;
+  if (pad_t != 0) {
+    auto last = out_video.index({out_video.size(0) - 1})
                     .unsqueeze(0)
-                    .repeat({video_temporal_patch_size_ - 1, 1, 1, 1});
+                    .repeat({pad_t, 1, 1, 1});
     out_video = torch::cat({out_video, last}, 0);
   }
 

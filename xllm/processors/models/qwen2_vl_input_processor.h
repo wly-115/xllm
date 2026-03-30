@@ -15,39 +15,33 @@ limitations under the License.
 
 #pragma once
 
-#include <torch/torch.h>
-
-#include <cstdint>
 #include <vector>
 
-#include "core/util/tensor_helper.h"
-#include "multimodal_input_processor.h"
+#include "processors/core/multimodal_input_processor.h"
+#include "processors/models/qwen2_vl_image_processor.h"
+#include "processors/models/qwen2_vl_video_processor.h"
 
 namespace xllm {
 
-class CLIPInputProcessor : public MultimodalInputProcessor {
+class Qwen2VLInputProcessor : public MultimodalInputProcessor {
  public:
-  CLIPInputProcessor(const ModelArgs& args);
-  ~CLIPInputProcessor() override = default;
+  Qwen2VLInputProcessor(const ModelArgs&);
+  ~Qwen2VLInputProcessor() override = default;
 
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
-  torch::Tensor process_images(const torch::Tensor& images);
 
  private:
-  std::vector<int64_t> get_resize_output_image_size(const torch::Tensor& image,
-                                                    int32_t shortest_edge);
+  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
+  bool process_images_embedding(
+      const std::vector<EmbeddingOutput>& images_embedding,
+      MMData& mm_datas);
+  bool process_videos(std::vector<torch::Tensor> videos,
+                      std::vector<VideoMetadata> video_meta_list,
+                      MMData& mm_datas);
 
  private:
-  bool do_resize_;
-  bool do_center_crop_;
-  bool do_rescale_;
-  bool do_normalize_;
-  int32_t shortest_edge_;
-  int32_t resample_;
-  double rescale_factor_;
-  std::pair<int32_t, int32_t> crop_size_;
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
+  Qwen2VLImageProcessor image_processor_;
+  Qwen2VLVideoProcessor video_processor_;
 };
 
 }  // namespace xllm

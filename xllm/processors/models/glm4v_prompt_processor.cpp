@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "processors/glm4v_prompt_processor.h"
+#include "processors/models/glm4v_prompt_processor.h"
 
 #include <cassert>
 #include <cstdint>

@@ -1,4 +1,4 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,52 +15,33 @@ limitations under the License.
 
 #pragma once
 
+#include <torch/torch.h>
+
 #include <cstdint>
-#include <tuple>
-#include <unordered_map>
 #include <vector>
 
-#include "multimodal_input_processor.h"
-
+#include "core/framework/model/model_args.h"
+#include "core/framework/request/mm_input.h"
 namespace xllm {
 
-class Glm4VInputProcessor : public MultimodalInputProcessor {
+class Glm4VVideoProcessor {
  public:
-  Glm4VInputProcessor(const ModelArgs&);
-  ~Glm4VInputProcessor() override = default;
+  explicit Glm4VVideoProcessor(const ModelArgs& args);
 
-  bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
+  bool process(torch::Tensor origin_video,
+               VideoMetadata& metadata,
+               torch::Tensor& pixel_values,
+               torch::Tensor& thw) const;
 
  private:
-  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
-  bool process_image(torch::Tensor image,
-                     torch::Tensor& pixel_values,
-                     torch::Tensor& thw);
-  bool process_videos(std::vector<torch::Tensor> videos,
-                      std::vector<VideoMetadata> video_meta_list,
-                      MMData& mm_datas);
-  bool process_video(torch::Tensor video,
-                     VideoMetadata& metadata,
-                     torch::Tensor& pixel_values,
-                     torch::Tensor& thw);
   torch::Tensor sample_frames(const VideoMetadata& metadata,
-                              int32_t temporal_patch_size);
+                              int32_t temporal_patch_size) const;
 
  private:
   bool do_convert_rgb_ = true;
   bool do_normalize_ = true;
-
   bool do_rescale_ = true;
   bool do_resize_ = true;
-
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
-
-  int32_t max_pixels_ = 12845056;
-  int32_t min_pixels_ = 3136;
-
-  int32_t merge_size_ = 2;
-  int32_t patch_size_ = 14;
 
   std::vector<double> video_mean_;
   std::vector<double> video_std_;
@@ -74,12 +55,8 @@ class Glm4VInputProcessor : public MultimodalInputProcessor {
   int32_t resample_ = 3;
   double rescale_factor_ = 0.00392156862745098;
 
-  std::unordered_map<std::string, int32_t> size_;
-  int32_t temporal_patch_size_ = 2;
   int32_t video_temporal_patch_size_ = 2;
-
   bool do_sample_frame_ = true;
-
   int32_t min_frames_ = 4;
   int32_t max_frames_ = 768;
 };

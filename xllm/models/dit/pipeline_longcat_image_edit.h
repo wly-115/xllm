@@ -30,7 +30,6 @@
 #include "core/framework/parallel_state/process_group.h"
 #include "core/framework/request/dit_request_state.h"
 #include "core/framework/request/mm_batch_data.h"
-#include "core/framework/request/mm_input.h"
 #include "core/framework/tokenizer/tokenizer.h"
 #include "core/layers/common/attention_metadata_builder.h"
 #include "core/layers/cuda/flashinfer_workspace.h"
@@ -38,7 +37,8 @@
 #include "models/model_registry.h"
 #include "models/vlm/qwen2_5_vl.h"
 #include "pipeline_longcat_image.h"
-#include "processors/qwen2_vl_input_processor.h"
+#include "processors/common/transforms.h"
+#include "processors/models/qwen2_vl_image_processor.h"
 #include "transformer_longcat_image.h"
 
 namespace xllm {
@@ -83,7 +83,8 @@ inline std::pair<int64_t, int64_t> calculate_dimensions_edit(
 class LongCatImageEditPipelineImpl : public torch::nn::Module {
  public:
   explicit LongCatImageEditPipelineImpl(const DiTModelContext& context)
-      : context_(context) {
+      : context_(context),
+        vl_image_processor_(context.get_model_args("text_encoder")) {
     const auto& model_args = context.get_model_args("vae");
     options_ = context.get_tensor_options();
 
@@ -156,9 +157,6 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
 
     prompt_template_encode_prefix_ = PROMPT_TEMPLATE_ENCODE_PREFIX_EDIT;
     prompt_template_encode_suffix_ = PROMPT_TEMPLATE_ENCODE_SUFFIX_EDIT;
-
-    vl_image_processor_ = std::make_unique<Qwen2VLInputProcessor>(
-        context.get_model_args("text_encoder"));
 
     register_module("vae", vae_);
     register_module("vae_image_processor", vae_image_processor_);
@@ -400,23 +398,13 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
     } else {
       img = img.clamp(0.0f, 255.0f);
     }
-    MMInput mm_input;
-    MMInputItem item;
-    item.type = MMType::IMAGE;
-    item.decode_image = img;
-    mm_input.insert({item});
-
-    MMData mm_data;
-    CHECK(vl_image_processor_->process(mm_input, mm_data))
+    torch::Tensor pixel_values;
+    torch::Tensor image_grid_thw;
+    CHECK(vl_image_processor_.process(img, pixel_values, image_grid_thw))
         << "VL image processor failed";
 
-    auto pixel_values = mm_data.get<torch::Tensor>("pixel_values");
-    auto image_grid_thw = mm_data.get<torch::Tensor>("image_grid_thw");
-    CHECK(pixel_values.has_value() && image_grid_thw.has_value())
-        << "VL processor did not produce pixel_values and image_grid_thw";
-
     int64_t num_image_tokens =
-        image_grid_thw->prod().item<int64_t>() / merge_length;
+        image_grid_thw.prod().item<int64_t>() / merge_length;
 
     // 2. Build prefix string: replace <|image_pad|> with num_image_tokens
     //    copies (diffusers replacement logic).
@@ -903,11 +891,11 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
     // to LANCZOS in PyTorch's interpolate function.
     // Step 1: resize to full target resolution (matches diffusers:
     //   image = self.image_processor.resize(image, calc_h, calc_w))
-    prompt_image = vl_image_processor_->resize(
-        prompt_image,
-        {calculated_height, calculated_width},
-        /*resample=*/3,  // BICUBIC (approximate LANCZOS)
-        /*antialias=*/true);
+    prompt_image =
+        transforms::resize(prompt_image,
+                           {calculated_height, calculated_width},
+                           /*resample=*/3,  // BICUBIC (approximate LANCZOS)
+                           /*antialias=*/true);
     // Ensure float32 before second resize: CUDA bicubic antialias kernel does
     // not support uint8. The first resize may return uint8 when the input is
     // uint8 (multimodal_input_processor.cpp restores the original dtype on
@@ -918,11 +906,11 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
     // Step 2: resize to half resolution for VL text encoder (matches diffusers:
     //   prompt_image = self.image_processor.resize(image, calc_h//2,
     //   calc_w//2))
-    prompt_image = vl_image_processor_->resize(
-        prompt_image,
-        {calculated_height / 2, calculated_width / 2},
-        /*resample=*/3,  // BICUBIC (approximate LANCZOS)
-        /*antialias=*/true);
+    prompt_image =
+        transforms::resize(prompt_image,
+                           {calculated_height / 2, calculated_width / 2},
+                           /*resample=*/3,  // BICUBIC (approximate LANCZOS)
+                           /*antialias=*/true);
     prompt_image = prompt_image.unsqueeze(0);  // [1,C,H,W] for encode_prompt
 
     int64_t batch_size;
@@ -1118,7 +1106,7 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
 
   // Model components
   VAEImageProcessor vae_image_processor_{nullptr};
-  std::unique_ptr<Qwen2VLInputProcessor> vl_image_processor_;
+  Qwen2VLImageProcessor vl_image_processor_;
   VAE vae_{nullptr};
   LongCatImagePosEmbed pos_embed_{nullptr};
   LongCatImageTransformer2DModel transformer_{nullptr};

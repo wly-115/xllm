@@ -18,13 +18,14 @@ limitations under the License.
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "core/framework/model/model_args.h"
-#include "processors/prompt_processor.h"
+#include "processors/core/prompt_processor.h"
 
 namespace xllm {
 
-class Qwen2_5_VLPromptProcessor : public PromptProcessor {
+class CLIPVLPromptProcessor : public PromptProcessor {
   enum class TokenType {
     INVALID,
     IMAGE,
@@ -32,11 +33,11 @@ class Qwen2_5_VLPromptProcessor : public PromptProcessor {
   };
 
  public:
-  explicit Qwen2_5_VLPromptProcessor(const ModelArgs& args);
+  explicit CLIPVLPromptProcessor(const ModelArgs& args);
 
   void process(std::string& prompt, const MMData& mm_data) override;
   void find_mm_spans(const std::vector<int32_t>& prompt,
-                     MMData& mm_data) override;
+                     MMData& mm_data) override {}
 
  private:
   std::pair<TokenType, size_t> find_vision_token(const std::string& prompt,
@@ -44,10 +45,6 @@ class Qwen2_5_VLPromptProcessor : public PromptProcessor {
 
   const std::string image_token_ = "<|image_pad|>";
   const std::string video_token_ = "<|video_pad|>";
-  int32_t vision_start_token_id_;
-  int32_t vision_end_token_id_;
-  int32_t image_token_id_;
-  int32_t video_token_id_;
   int32_t merge_size_ = 0;
 };
 

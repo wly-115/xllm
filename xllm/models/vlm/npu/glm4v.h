@@ -29,8 +29,8 @@ limitations under the License.
 #include "core/layers/npu/npu_lm_head_impl.h"
 #include "models/llm/npu/glm4.h"
 #include "models/model_registry.h"
-#include "processors/glm4v_input_processor.h"
-#include "processors/glm4v_prompt_processor.h"
+#include "processors/models/glm4v_input_processor.h"
+#include "processors/models/glm4v_prompt_processor.h"
 #include "torch_npu/csrc/aten/CustomFunctions.h"
 #include "xllm/core/layers/npu/npu_glm4_vision_encoder_layer_impl.h"
 
