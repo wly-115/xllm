@@ -38,7 +38,7 @@
 #include "models/model_registry.h"
 #include "models/vlm/qwen2_5_vl.h"
 #include "pipeline_longcat_image.h"
-#include "processors/qwen2_vl_input_processor.h"
+#include "processors/models/qwen2_vl_input_processor.h"
 #include "transformer_longcat_image.h"
 
 namespace xllm {
@@ -903,7 +903,7 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
     // to LANCZOS in PyTorch's interpolate function.
     // Step 1: resize to full target resolution (matches diffusers:
     //   image = self.image_processor.resize(image, calc_h, calc_w))
-    prompt_image = vl_image_processor_->resize(
+    prompt_image = vl_image_processor_->image_processor().resize(
         prompt_image,
         {calculated_height, calculated_width},
         /*resample=*/3,  // BICUBIC (approximate LANCZOS)
@@ -918,7 +918,7 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
     // Step 2: resize to half resolution for VL text encoder (matches diffusers:
     //   prompt_image = self.image_processor.resize(image, calc_h//2,
     //   calc_w//2))
-    prompt_image = vl_image_processor_->resize(
+    prompt_image = vl_image_processor_->image_processor().resize(
         prompt_image,
         {calculated_height / 2, calculated_width / 2},
         /*resample=*/3,  // BICUBIC (approximate LANCZOS)

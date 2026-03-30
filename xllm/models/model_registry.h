@@ -30,7 +30,7 @@ limitations under the License.
 #include "core/framework/tokenizer/tokenizer_args.h"
 #include "core/util/json_reader.h"
 #include "core/util/type_traits.h"  // IWYU pragma: keep
-#include "processors/multimodal_processor.h"
+#include "processors/core/multimodal_processor.h"
 
 namespace xllm {
 

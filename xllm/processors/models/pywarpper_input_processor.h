@@ -17,7 +17,7 @@ limitations under the License.
 
 #include <vector>
 
-#include "multimodal_input_processor.h"
+#include "processors/core/multimodal_input_processor.h"
 
 namespace xllm {
 

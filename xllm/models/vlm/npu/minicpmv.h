@@ -30,9 +30,9 @@ limitations under the License.
 #include "core/layers/npu/npu_siglip_encoder_layer_impl.h"
 #include "models/llm/npu/qwen2.h"
 #include "models/model_registry.h"
-#include "processors/minicpmv_input_processor.h"
-#include "processors/prompt_processor.h"
-#include "processors/pywarpper_input_processor.h"
+#include "processors/core/prompt_processor.h"
+#include "processors/models/minicpmv_input_processor.h"
+#include "processors/models/pywarpper_input_processor.h"
 #include "xllm_atb_layers/core/include/atb_speed/log.h"
 
 namespace xllm::npu::model {

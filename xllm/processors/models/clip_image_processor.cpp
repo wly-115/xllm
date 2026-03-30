@@ -1,4 +1,4 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "clip_input_processor.h"
+#include "processors/models/clip_image_processor.h"
 
 namespace xllm {
 
-CLIPInputProcessor::CLIPInputProcessor(const ModelArgs& args) {
+CLIPImageProcessor::CLIPImageProcessor(const ModelArgs& args) {
   do_resize_ = args.mm_image_do_resize();
   do_center_crop_ = args.mm_image_do_center_crop();
   do_rescale_ = args.mm_image_do_rescale();
@@ -31,11 +31,8 @@ CLIPInputProcessor::CLIPInputProcessor(const ModelArgs& args) {
   image_std_ = args.mm_image_normalize_std();
 }
 
-bool CLIPInputProcessor::process(const MMInput& mm_inputs, MMData& mm_datas) {
-  return false;
-}
-
-torch::Tensor CLIPInputProcessor::process_images(const torch::Tensor& images) {
+torch::Tensor CLIPImageProcessor::process_images(
+    const torch::Tensor& images) const {
   int batch_size = images.size(0);
   std::vector<torch::Tensor> processed_images;
   auto size = get_resize_output_image_size(images[0], shortest_edge_);
@@ -65,9 +62,9 @@ torch::Tensor CLIPInputProcessor::process_images(const torch::Tensor& images) {
   return torch::stack(processed_images);
 }
 
-std::vector<int64_t> CLIPInputProcessor::get_resize_output_image_size(
+std::vector<int64_t> CLIPImageProcessor::get_resize_output_image_size(
     const torch::Tensor& image,
-    int shortest_edge) {
+    int shortest_edge) const {
   int height = image.size(1);
   int width = image.size(2);
 

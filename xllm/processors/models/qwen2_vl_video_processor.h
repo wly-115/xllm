@@ -1,4 +1,4 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,57 +15,43 @@ limitations under the License.
 
 #pragma once
 
-#include <tuple>
+#include <torch/torch.h>
+
 #include <unordered_map>
 #include <vector>
 
-#include "multimodal_input_processor.h"
+#include "core/framework/model/model_args.h"
+#include "core/framework/request/mm_input.h"
+#include "processors/common/base_video_processor.h"
 
 namespace xllm {
 
-class Qwen2VLInputProcessor : public MultimodalInputProcessor {
+class Qwen2VLVideoProcessor : protected BaseVideoProcessor {
  public:
-  Qwen2VLInputProcessor(const ModelArgs&);
-  ~Qwen2VLInputProcessor() override = default;
+  explicit Qwen2VLVideoProcessor(const ModelArgs& args);
 
-  bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
+  bool process(torch::Tensor origin_video,
+               VideoMetadata& metadata,
+               torch::Tensor& pixel_values,
+               torch::Tensor& thw) const;
+  int temporal_patch_size() const { return temporal_patch_size_; }
 
  private:
-  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
-  bool process_image(torch::Tensor image,
-                     torch::Tensor& pixel_values,
-                     torch::Tensor& thw);
-
-  bool process_images_embedding(
-      const std::vector<EmbeddingOutput>& images_embedding,
-      MMData& mm_datas);
-
-  bool process_videos(std::vector<torch::Tensor> videos,
-                      std::vector<VideoMetadata> video_meta_list,
-                      MMData& mm_datas);
-  bool process_video(torch::Tensor video,
-                     VideoMetadata& metadata,
-                     torch::Tensor& pixel_values,
-                     torch::Tensor& thw);
   torch::Tensor sample_frames(const VideoMetadata& metadata,
                               int temporal_patch_size,
                               int min_frames,
                               int max_frames,
                               int num_frames = -1,
-                              double set_fps = -1.0);
+                              double set_fps = -1.0) const;
 
  private:
   bool do_convert_rgb_ = true;
   bool do_normalize_ = true;
-
   bool do_rescale_ = true;
   bool do_resize_ = true;
 
   std::vector<double> image_mean_;
   std::vector<double> image_std_;
-
-  int max_pixels_ = 12845056;
-  int min_pixels_ = 3136;
 
   int merge_size_ = 2;
   int patch_size_ = 14;
@@ -77,7 +63,6 @@ class Qwen2VLInputProcessor : public MultimodalInputProcessor {
   int temporal_patch_size_ = 2;
 
   bool do_sample_frame_ = true;
-
   int min_frames_ = 4;
   int max_frames_ = 768;
 };

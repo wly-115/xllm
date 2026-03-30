@@ -19,21 +19,36 @@ cc_library(
   NAME 
     processors
   HDRS
-    multimodal_input_processor.h
-    multimodal_processor.h
-    clip_input_processor.h
-    minicpmv_input_processor.h
-    qwen2_vl_input_processor.h
-    glm4v_input_processor.h
-    pywarpper_input_processor.h
-    prompt_processor.h
+    common/base_image_processor.h
+    common/base_video_processor.h
+    core/multimodal_input_processor.h
+    core/multimodal_processor.h
+    core/prompt_processor.h
+    models/clip_image_processor.h
+    models/clip_input_processor.h
+    models/glm4v_image_processor.h
+    models/glm4v_input_processor.h
+    models/glm4v_video_processor.h
+    models/minicpmv_image_processor.h
+    models/minicpmv_input_processor.h
+    models/pywarpper_input_processor.h
+    models/qwen2_vl_image_processor.h
+    models/qwen2_vl_input_processor.h
+    models/qwen2_vl_video_processor.h
   SRCS
-    multimodal_input_processor.cpp
-    clip_input_processor.cpp
-    minicpmv_input_processor.cpp
-    qwen2_vl_input_processor.cpp
-    glm4v_input_processor.cpp
-    pywarpper_input_processor.cpp
+    common/base_image_processor.cpp
+    common/base_video_processor.cpp
+    models/clip_image_processor.cpp
+    models/clip_input_processor.cpp
+    models/glm4v_image_processor.cpp
+    models/glm4v_input_processor.cpp
+    models/glm4v_video_processor.cpp
+    models/minicpmv_image_processor.cpp
+    models/minicpmv_input_processor.cpp
+    models/pywarpper_input_processor.cpp
+    models/qwen2_vl_image_processor.cpp
+    models/qwen2_vl_input_processor.cpp
+    models/qwen2_vl_video_processor.cpp
   DEPS
     ${BASE_DEPS}
 )

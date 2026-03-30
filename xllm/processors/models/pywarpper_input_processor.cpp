@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "pywarpper_input_processor.h"
+#include "processors/models/pywarpper_input_processor.h"
 
 #include <pybind11/embed.h>
 #include <torch/extension.h>

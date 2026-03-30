@@ -21,8 +21,8 @@ limitations under the License.
 #include "core/layers/qwen2_decoder_layer.h"
 #include "models/llm/qwen2.h"
 #include "models/model_registry.h"
-#include "processors/prompt_processor.h"
-#include "processors/qwen2_vl_input_processor.h"
+#include "processors/core/prompt_processor.h"
+#include "processors/models/qwen2_vl_input_processor.h"
 
 namespace xllm {
 

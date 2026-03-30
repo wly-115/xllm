@@ -20,33 +20,29 @@ limitations under the License.
 #include <vector>
 
 #include "core/util/tensor_helper.h"
-#include "multimodal_input_processor.h"
+#include "processors/core/multimodal_input_processor.h"
+#include "processors/models/minicpmv_image_processor.h"
 
 namespace xllm {
 
-class CLIPInputProcessor : public MultimodalInputProcessor {
+class MiniCPMVInputProcessor : public MultimodalInputProcessor {
  public:
-  CLIPInputProcessor(const ModelArgs& args);
-  ~CLIPInputProcessor() override = default;
+  MiniCPMVInputProcessor(const ModelArgs& args);
+  ~MiniCPMVInputProcessor() override = default;
+
+  static std::pair<int, int> get_sliced_grid(
+      const std::pair<int, int>& original_size,
+      int max_slice_nums,
+      int scale_resolution,
+      bool never_split = false);
 
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
-  torch::Tensor process_images(const torch::Tensor& images);
 
  private:
-  std::vector<int64_t> get_resize_output_image_size(const torch::Tensor& image,
-                                                    int shortest_edge);
+  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
 
  private:
-  bool do_resize_;
-  bool do_center_crop_;
-  bool do_rescale_;
-  bool do_normalize_;
-  int shortest_edge_;
-  int resample_;
-  double rescale_factor_;
-  std::pair<int, int> crop_size_;
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
+  MiniCPMVImageProcessor image_processor_;
 };
 
 }  // namespace xllm
