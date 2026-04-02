@@ -60,7 +60,10 @@ using MultimodalInputProcessorFactory =
         const ModelArgs& args)>;
 
 using MultimodalProcessorFactory =
-    std::function<std::unique_ptr<MultimodalProcessor>(const ModelArgs& args)>;
+    std::function<std::unique_ptr<MultimodalProcessor>(
+        const ModelArgs& args,
+        const TokenizerArgs& tokenizer_args,
+        std::unique_ptr<Tokenizer> tokenizer)>;
 
 using ModelArgsLoader =
     std::function<bool(const JsonReader& json, ModelArgs* args)>;
@@ -313,10 +316,15 @@ std::unique_ptr<DiTModel> create_dit_model(const DiTModelContext& context);
       VarName, ModelType, PromptProcessorClass);                            \
   const bool VarName##_multimodal_processor_registered = []() {             \
     ModelRegistry::register_multimodal_processor_factory(                   \
-        #ModelType, [](const ModelArgs& args) {                             \
+        #ModelType,                                                         \
+        [](const ModelArgs& args,                                           \
+           const TokenizerArgs& tokenizer_args,                             \
+           std::unique_ptr<Tokenizer> tokenizer) {                          \
           return std::make_unique<MultimodalProcessor>(                     \
               std::make_unique<MMProcessorClass>(args),                     \
-              std::make_unique<PromptProcessorClass>(args));                \
+              std::make_unique<PromptProcessorClass>(args),                 \
+              std::make_unique<JinjaChatTemplate>(tokenizer_args),          \
+              std::move(tokenizer));                                        \
         });                                                                 \
     return true;                                                            \
   }()

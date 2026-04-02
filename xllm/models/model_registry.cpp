@@ -383,19 +383,24 @@ MultimodalProcessorFactory ModelRegistry::get_multimodal_processor_factory(
 
   auto mm_processor_factory = meta.mm_processor_factory;
   auto prompt_processor_factory = meta.prompt_processor_factory;
-  return
-      [mm_processor_factory, prompt_processor_factory](const ModelArgs& args) {
-        std::unique_ptr<MultimodalInputProcessor> mm_processor;
-        std::unique_ptr<PromptProcessor> prompt_processor;
-        if (mm_processor_factory != nullptr) {
-          mm_processor = mm_processor_factory(args);
-        }
-        if (prompt_processor_factory != nullptr) {
-          prompt_processor = prompt_processor_factory(args);
-        }
-        return std::make_unique<MultimodalProcessor>(
-            std::move(mm_processor), std::move(prompt_processor));
-      };
+  return [mm_processor_factory, prompt_processor_factory](
+             const ModelArgs& args,
+             const TokenizerArgs& tokenizer_args,
+             std::unique_ptr<Tokenizer> tokenizer) {
+    std::unique_ptr<MultimodalInputProcessor> mm_processor;
+    std::unique_ptr<PromptProcessor> prompt_processor;
+    if (mm_processor_factory != nullptr) {
+      mm_processor = mm_processor_factory(args);
+    }
+    if (prompt_processor_factory != nullptr) {
+      prompt_processor = prompt_processor_factory(args);
+    }
+    return std::make_unique<MultimodalProcessor>(
+        std::move(mm_processor),
+        std::move(prompt_processor),
+        std::make_unique<JinjaChatTemplate>(tokenizer_args),
+        std::move(tokenizer));
+  };
 }
 
 ModelArgsLoader ModelRegistry::get_model_args_loader(const std::string& name) {

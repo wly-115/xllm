@@ -28,7 +28,6 @@ limitations under the License.
 #include "common/options.h"
 #include "common/types.h"
 #include "engine.h"
-#include "framework/chat_template/jinja_chat_template.h"
 #include "framework/request/mm_input.h"
 #include "framework/request/request_output.h"
 #include "framework/request/request_params.h"
@@ -85,6 +84,10 @@ class VLMMaster : public Master {
 
  private:
   using Task = folly::Function<void()>;
+  std::shared_ptr<Request> build_request(PreprocessOutput output,
+                                         RequestParams sp,
+                                         OutputCallback callback);
+
   std::shared_ptr<Request> generate_request(std::string prompt,
                                             MMData mm_data,
                                             RequestParams sp,
@@ -105,13 +108,6 @@ class VLMMaster : public Master {
 
   // thread pool for handling requests
   std::unique_ptr<ThreadPool> threadpool_;
-
-  // we don't know if tokenizer is thread safe, so we create one for each thread
-  // for now
-  std::unique_ptr<Tokenizer> tokenizer_;
-
-  // chat template instance
-  std::unique_ptr<JinjaChatTemplate> chat_template_;
 
   // unified multimodal processor for VLM request orchestration
   std::unique_ptr<MultimodalProcessor> multimodal_processor_;

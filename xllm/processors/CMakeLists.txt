@@ -38,6 +38,7 @@ cc_library(
   SRCS
     common/base_image_processor.cpp
     common/base_video_processor.cpp
+    core/multimodal_processor.cpp
     models/clip_image_processor.cpp
     models/clip_input_processor.cpp
     models/glm4v_image_processor.cpp
