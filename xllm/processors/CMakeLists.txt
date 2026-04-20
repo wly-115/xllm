@@ -19,33 +19,49 @@ cc_library(
   NAME 
     processors
   HDRS
-    image_processor.h
-    clip_image_processor.h
-    minicpmv_image_processor.h
-    qwen2_vl_image_processor.h
-    qwen3_vl_image_processor.h
-    glm4v_image_processor.h
-    pywarpper_image_processor.h
-    input_processor.h
-    qwen2_vl_input_processor.h
-    qwen3_vl_input_processor.h
-    glm4v_input_processor.h
-    minicpmv_input_processor.h
-    clip_input_processor.h
+    common/transforms.h
+    core/multimodal_input_processor.h
+    core/multimodal_processor.h
+    core/prompt_processor.h
+    models/clip_image_processor.h
+    models/clip_input_processor.h
+    models/clip_prompt_processor.h
+    models/glm4v_image_processor.h
+    models/glm4v_input_processor.h
+    models/glm4v_prompt_processor.h
+    models/glm4v_video_processor.h
+    models/minicpmv_image_processor.h
+    models/minicpmv_input_processor.h
+    models/minicpmv_prompt_processor.h
+    models/pywarpper_input_processor.h
+    models/qwen2_vl_prompt_processor.h
+    models/qwen2_vl_image_processor.h
+    models/qwen2_vl_input_processor.h
+    models/qwen2_vl_video_processor.h
+    models/qwen3_vl_input_processor.h
+    models/qwen3_vl_prompt_processor.h
+    models/qwen3_vl_video_processor.h
   SRCS
-    image_processor.cpp
-    clip_image_processor.cpp
-    minicpmv_image_processor.cpp
-    qwen2_vl_image_processor.cpp
-    qwen3_vl_image_processor.cpp
-    glm4v_image_processor.cpp
-    pywarpper_image_processor.cpp
-    qwen2_vl_input_processor.cpp
-    qwen3_vl_input_processor.cpp
-    glm4v_input_processor.cpp
-    minicpmv_input_processor.cpp
-    clip_input_processor.cpp
+    common/transforms.cpp
+    core/multimodal_processor.cpp
+    models/clip_image_processor.cpp
+    models/clip_input_processor.cpp
+    models/clip_prompt_processor.cpp
+    models/glm4v_image_processor.cpp
+    models/glm4v_input_processor.cpp
+    models/glm4v_prompt_processor.cpp
+    models/glm4v_video_processor.cpp
+    models/minicpmv_image_processor.cpp
+    models/minicpmv_input_processor.cpp
+    models/minicpmv_prompt_processor.cpp
+    models/pywarpper_input_processor.cpp
+    models/qwen2_vl_prompt_processor.cpp
+    models/qwen2_vl_image_processor.cpp
+    models/qwen2_vl_input_processor.cpp
+    models/qwen2_vl_video_processor.cpp
+    models/qwen3_vl_input_processor.cpp
+    models/qwen3_vl_prompt_processor.cpp
+    models/qwen3_vl_video_processor.cpp
   DEPS
     ${BASE_DEPS}
-    :request
 )

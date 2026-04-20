@@ -82,32 +82,26 @@ VLMMaster::VLMMaster(const Options& options)
     XServiceClient::get_instance()->register_instance(instance_info);
   }
 
-  // construct chat template
-  chat_template_ =
-      std::make_unique<JinjaChatTemplate>(engine_->tokenizer_args());
-
-  // create input processor
   auto input_processor_factory =
-      ModelRegistry::get_input_processor_factory(model_args_.model_type());
-  if (input_processor_factory == nullptr) {
-    LOG(ERROR) << "No input processor defined for model type: "
-               << model_args_.model_type();
+      ModelRegistry::get_multimodal_input_processor_factory(
+          model_args_.model_type());
+  auto prompt_processor_factory =
+      ModelRegistry::get_prompt_processor_factory(model_args_.model_type());
+  if (input_processor_factory == nullptr ||
+      prompt_processor_factory == nullptr) {
+    LOG(FATAL) << "Missing multimodal processor component for model type: "
+               << model_args_.model_type() << ", has_input_processor="
+               << (input_processor_factory != nullptr)
+               << ", has_prompt_processor="
+               << (prompt_processor_factory != nullptr);
   } else {
-    input_processor_ = input_processor_factory(model_args_);
+    multimodal_processor_ =
+        CreateMultimodalProcessor(input_processor_factory(model_args_),
+                                  prompt_processor_factory(model_args_),
+                                  engine_->tokenizer_args(),
+                                  engine_->tokenizer()->clone());
   }
 
-  // create image processor
-  auto image_processor_factory =
-      ModelRegistry::get_image_processor_factory(model_args_.model_type());
-  if (image_processor_factory == nullptr) {
-    LOG(ERROR) << "No image processor defined for model type: "
-               << model_args_.model_type();
-  } else {
-    image_processor_ = image_processor_factory(model_args_);
-  }
-
-  // construct tokenizer and handling threads
-  tokenizer_ = engine_->tokenizer()->clone();
   threadpool_ =
       std::make_unique<ThreadPool>(options_.num_request_handling_threads());
 }
@@ -239,7 +233,7 @@ void VLMMaster::handle_batch_request_with_image_urls(
     if (!build_mm_data_from_image_urls(image_urls[i], mm_data)) {
       callback(i,
                RequestOutput(Status{StatusCode::INVALID_ARGUMENT,
-                                    "Image processor process failed."}));
+                                    "Multimodal processor process failed."}));
       continue;
     }
 
@@ -311,32 +305,27 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
                                                      MMData mm_data,
                                                      RequestParams sp,
                                                      OutputCallback callback) {
-  if (prompt.empty()) {
-    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, "Prompt is empty");
-    return nullptr;
-  }
-  Timer timer;
-  input_processor_->process(prompt, mm_data);
-
-  std::vector<int> prompt_tokens;
-  if (!tokenizer_->encode(prompt, &prompt_tokens)) {
-    LOG(ERROR) << "Failed to encode prompt: " << prompt;
+  PreprocessOutput output;
+  if (!multimodal_processor_->preprocess(prompt, std::move(mm_data), output)) {
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "Failed to encode prompt");
+                        "Failed to preprocess multimodal request.");
     return nullptr;
   }
-  input_processor_->find_mm_spans(prompt_tokens, mm_data);
 
-  COUNTER_ADD(tokenization_latency_seconds, timer.elapsed_seconds());
+  return build_request(std::move(output), std::move(sp), std::move(callback));
+}
 
+std::shared_ptr<Request> VLMMaster::build_request(PreprocessOutput output,
+                                                  RequestParams sp,
+                                                  OutputCallback callback) {
   // TODO: prompt_token is not enough, need to add image token size
   int32_t max_context_len = model_args_.max_position_embeddings();
   if (!options_.enable_chunked_prefill()) {
     max_context_len =
         std::min(max_context_len, options_.max_tokens_per_batch());
   }
-  if (prompt_tokens.size() >= max_context_len) {
-    LOG(ERROR) << "Prompt is too long: " << prompt_tokens.size();
+  if (output.prompt_tokens.size() >= max_context_len) {
+    LOG(ERROR) << "Prompt is too long: " << output.prompt_tokens.size();
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, "Prompt is too long");
     return nullptr;
   }
@@ -349,7 +338,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
 
   // allocate enough capacity for prompt tokens, max tokens, and speculative
   // tokens, TODO: add image token size as well.
-  const size_t capacity = prompt_tokens.size() + max_tokens + 1;
+  const size_t capacity = output.prompt_tokens.size() + max_tokens + 1;
   const size_t best_of = sp.best_of.value_or(sp.n);
 
   RequestSamplingParam sampling_param;
@@ -379,7 +368,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
   if (sp.stop.has_value()) {
     for (const auto& s : sp.stop.value()) {
       std::vector<int> tmp_tokens;
-      if (!tokenizer_->encode(s, &tmp_tokens)) {
+      if (!multimodal_processor_->encode_prompt(s, tmp_tokens)) {
         CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
                             "Failed to encode stop sequence");
         LOG(ERROR) << "Failed to encode stop sequence: " << s;
@@ -402,9 +391,9 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
     stream = false;
   }
 
-  RequestState req_state(std::move(prompt),
-                         std::move(prompt_tokens),
-                         std::move(mm_data),
+  RequestState req_state(std::move(output.prompt),
+                         std::move(output.prompt_tokens),
+                         std::move(output.mm_data),
                          std::move(sampling_param),
                          std::move(stopping_checker),
                          capacity,
@@ -433,39 +422,14 @@ std::shared_ptr<Request> VLMMaster::generate_request(
     RequestParams sp,
     std::string payload,
     OutputCallback callback) {
-  Timer timer;
-  static MMInputTransfer mm_input_transfer;
-
-  MMInput mm_inputs(std::move(payload));
-  MMErrCode code = mm_input_transfer.trans(messages, mm_inputs);
-  if (code != MMErrCode::SUCCESS) {
-    std::string msg = MMErrToString(code);
-    LOG(ERROR) << msg;
-    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, msg);
-    return nullptr;
-  }
-
-  MMData mm_data;
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << " image processor process failed.";
+  PreprocessOutput output;
+  if (!multimodal_processor_->preprocess(messages, payload, output)) {
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "Image processor process failed.");
+                        "Failed to preprocess multimodal request.");
     return nullptr;
   }
 
-  auto prompt = chat_template_->apply(messages);
-  if (!prompt.has_value()) {
-    CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT,
-                        "Failed to construct prompt from messages");
-    LOG(ERROR) << "Failed to construct prompt from messages";
-    return nullptr;
-  }
-  COUNTER_ADD(chat_template_latency_seconds, timer.elapsed_seconds());
-
-  return generate_request(std::move(prompt.value()),
-                          std::move(mm_data),
-                          std::move(sp),
-                          std::move(callback));
+  return build_request(std::move(output), std::move(sp), std::move(callback));
 }
 
 bool VLMMaster::build_mm_data_from_image_urls(
@@ -491,8 +455,9 @@ bool VLMMaster::build_mm_data_from_image_urls(
     return false;
   }
 
-  if (!mm_inputs.empty() && !image_processor_->process(mm_inputs, mm_data)) {
-    LOG(ERROR) << "image processor process failed.";
+  if (!mm_inputs.empty() &&
+      !multimodal_processor_->process_mm_input(mm_inputs, mm_data)) {
+    LOG(ERROR) << "Multimodal processor process failed.";
     return false;
   }
 

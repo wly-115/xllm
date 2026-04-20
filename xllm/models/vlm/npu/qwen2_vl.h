@@ -29,8 +29,7 @@ limitations under the License.
 #include "core/layers/npu/npu_rms_norm_impl.h"
 #include "models/llm/npu/qwen2.h"
 #include "models/model_registry.h"
-#include "processors/qwen2_vl_image_processor.h"
-#include "processors/qwen2_vl_input_processor.h"
+#include "processors/models/qwen2_vl_input_processor.h"
 #include "qwen2_5_vl.h"
 
 namespace xllm::npu::model {
@@ -628,9 +627,10 @@ class Qwen2_VLForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(Qwen2_VLForConditionalGeneration);
 
-REGISTER_INPUT_PROCESSOR(qwen2_vl, Qwen2_5_VLInputProcessor);
+REGISTER_MULTIMODAL_PROCESSOR_COMPONENTS(qwen2_vl,
+                                         Qwen2VLInputProcessor,
+                                         Qwen2VLPromptProcessor);
 REGISTER_CAUSAL_VLM_MODEL(qwen2_vl, Qwen2_VLForConditionalGeneration);
-REGISTER_IMAGE_PROCESSOR(qwen2_vl, Qwen2VLImageProcessor);
 
 REGISTER_MODEL_ARGS(qwen2_vl, [&] {
   // text config

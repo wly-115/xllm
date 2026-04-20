@@ -25,8 +25,8 @@ limitations under the License.
 #include "core/layers/npu/npu_rms_norm_impl.h"
 #include "models/llm/npu/qwen3.h"
 #include "models/model_registry.h"
-#include "processors/qwen3_vl_image_processor.h"
-#include "processors/qwen3_vl_input_processor.h"
+#include "processors/models/qwen3_vl_input_processor.h"
+#include "processors/models/qwen3_vl_prompt_processor.h"
 #include "qwen2_5_vl.h"
 
 namespace xllm::npu::model {
@@ -827,9 +827,10 @@ class Qwen3_VLForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(Qwen3_VLForConditionalGeneration);
 
-REGISTER_INPUT_PROCESSOR(qwen3_vl, Qwen3_VLInputProcessor);
+REGISTER_MULTIMODAL_PROCESSOR_COMPONENTS(qwen3_vl,
+                                         Qwen3VLInputProcessor,
+                                         Qwen3VLPromptProcessor);
 REGISTER_CAUSAL_VLM_MODEL(qwen3_vl, Qwen3_VLForConditionalGeneration);
-REGISTER_IMAGE_PROCESSOR(qwen3_vl, Qwen3VLImageProcessor);
 
 REGISTER_MODEL_ARGS(qwen3_vl, [&] {
   // text config

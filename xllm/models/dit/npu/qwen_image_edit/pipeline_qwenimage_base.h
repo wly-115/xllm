@@ -33,7 +33,7 @@ limitations under the License.
 #include "models/dit/flowmatch_euler_discrete_scheduler.h"
 #include "models/dit/utils/common_util.h"
 #include "models/model_registry.h"
-#include "processors/qwen2_vl_image_processor.h"
+#include "processors/models/qwen2_vl_image_processor.h"
 #include "transformer_qwen_image.h"
 namespace xllm::dit::npu {
 namespace qwenimage {
