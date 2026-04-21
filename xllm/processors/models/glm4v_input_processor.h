@@ -31,10 +31,11 @@ class Glm4VInputProcessor : public MultimodalInputProcessor {
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
 
  private:
-  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
-  bool process_videos(std::vector<torch::Tensor> videos,
-                      std::vector<VideoMetadata> video_meta_list,
-                      MMData& mm_datas);
+  bool process_images(const std::vector<torch::Tensor>& images,
+                      std::vector<MMDataItem>& image_items);
+  bool process_videos(const std::vector<torch::Tensor>& videos,
+                      const std::vector<VideoMetadata>& video_meta_list,
+                      std::vector<MMDataItem>& video_items);
 
  private:
   Glm4VImageProcessor image_processor_;

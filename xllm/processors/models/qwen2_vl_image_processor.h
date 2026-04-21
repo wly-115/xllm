@@ -29,6 +29,9 @@ class Qwen2VLImageProcessor {
   bool process(torch::Tensor image,
                torch::Tensor& pixel_values,
                torch::Tensor& thw) const;
+  bool process_batch(const torch::Tensor& images,
+                     torch::Tensor& pixel_values,
+                     torch::Tensor& thw) const;
 
  private:
   bool do_convert_rgb_ = true;

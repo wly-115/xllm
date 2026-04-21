@@ -108,9 +108,25 @@ Glm4VImageProcessor::Glm4VImageProcessor(const ModelArgs& args) {
 bool Glm4VImageProcessor::process(torch::Tensor image,
                                   torch::Tensor& pixel_values,
                                   torch::Tensor& thw) const {
-  auto shape = image.sizes();
-  auto resized_height = shape[1];
-  auto resized_width = shape[2];
+  torch::Tensor batch_pixel_values;
+  torch::Tensor batch_thw;
+  if (!process_batch(image.unsqueeze(0), batch_pixel_values, batch_thw)) {
+    return false;
+  }
+
+  pixel_values = batch_pixel_values.squeeze(0);
+  thw = batch_thw.squeeze(0);
+  return true;
+}
+
+bool Glm4VImageProcessor::process_batch(const torch::Tensor& images,
+                                        torch::Tensor& pixel_values,
+                                        torch::Tensor& thw) const {
+  torch::Tensor batch_images = images;
+  const auto shape = batch_images.sizes();
+  const int64_t batch_size = shape[0];
+  int64_t resized_height = shape[2];
+  int64_t resized_width = shape[3];
 
   if (do_resize_) {
     auto size = smart_resize(temporal_patch_size_,
@@ -125,30 +141,33 @@ bool Glm4VImageProcessor::process(torch::Tensor image,
     }
 
     std::tie(resized_height, resized_width) = *size;
-    image = transforms::resize(
-        image, {resized_height, resized_width}, resample_, true);
+    batch_images = transforms::resize(
+        batch_images, {resized_height, resized_width}, resample_, true);
   }
 
   if (do_normalize_) {
-    image = transforms::normalize(image, image_mean_, image_std_);
+    batch_images = transforms::normalize(batch_images, image_mean_, image_std_);
   }
 
   if (do_rescale_) {
-    image = transforms::rescale(image, rescale_factor_);
+    batch_images = transforms::rescale(batch_images, rescale_factor_);
   }
 
-  auto patches = torch::stack({image}, 0);
-  auto repeats =
-      patches[-1].unsqueeze(0).repeat({temporal_patch_size_ - 1, 1, 1, 1});
-  patches = torch::cat({patches, repeats}, 0);
-  shape = patches.sizes();
+  torch::Tensor patches = batch_images.unsqueeze(1);
+  if (temporal_patch_size_ > 1) {
+    torch::Tensor repeats =
+        patches.repeat({1, temporal_patch_size_ - 1, 1, 1, 1});
+    patches = torch::cat({patches, repeats}, 1);
+  }
 
-  auto channel = shape[1];
-  auto grid_t = shape[0] / temporal_patch_size_;
-  auto grid_h = resized_height / patch_size_;
-  auto grid_w = resized_width / patch_size_;
+  const auto patch_shape = patches.sizes();
+  const int64_t channel = patch_shape[2];
+  const int64_t grid_t = patch_shape[1] / temporal_patch_size_;
+  const int64_t grid_h = resized_height / patch_size_;
+  const int64_t grid_w = resized_width / patch_size_;
 
-  patches = patches.view({grid_t,
+  patches = patches.view({batch_size,
+                          grid_t,
                           temporal_patch_size_,
                           channel,
                           grid_h / merge_size_,
@@ -157,13 +176,14 @@ bool Glm4VImageProcessor::process(torch::Tensor image,
                           grid_w / merge_size_,
                           merge_size_,
                           patch_size_});
-  patches = patches.permute({0, 3, 6, 4, 7, 2, 1, 5, 8});
-  patches = patches.reshape(
-      {grid_t * grid_h * grid_w,
+  patches = patches.permute({0, 1, 4, 7, 5, 8, 3, 2, 6, 9});
+  pixel_values = patches.reshape(
+      {batch_size,
+       grid_t * grid_h * grid_w,
        channel * temporal_patch_size_ * patch_size_ * patch_size_});
-
-  pixel_values = patches;
-  thw = torch::tensor({grid_t, grid_h, grid_w}).reshape({-1, 3});
+  thw = torch::tensor({grid_t, grid_h, grid_w})
+            .repeat({batch_size, 1})
+            .reshape({batch_size, 1, 3});
 
   return true;
 }

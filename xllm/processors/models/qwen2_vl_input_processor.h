@@ -31,13 +31,12 @@ class Qwen2VLInputProcessor : public MultimodalInputProcessor {
   bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
 
  private:
-  bool process_images(std::vector<torch::Tensor> images, MMData& mm_datas);
-  bool process_images_embedding(
-      const std::vector<EmbeddingOutput>& images_embedding,
-      MMData& mm_datas);
-  bool process_videos(std::vector<torch::Tensor> videos,
-                      std::vector<VideoMetadata> video_meta_list,
-                      MMData& mm_datas);
+  bool process_images(const std::vector<torch::Tensor>& images,
+                      std::vector<MMDataItem>& image_items);
+  bool process_videos(const std::vector<torch::Tensor>& videos,
+                      const std::vector<VideoMetadata>& video_meta_list,
+                      std::vector<MMDataItem>& video_items);
+  MMDict process_image_embedding(const EmbeddingOutput& image_embedding) const;
 
  private:
   Qwen2VLImageProcessor image_processor_;

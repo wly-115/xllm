@@ -15,120 +15,123 @@ limitations under the License.
 
 #include "processors/models/qwen2_vl_input_processor.h"
 
+#include "core/framework/request/mm_data_visitor.h"
+#include "processors/common/multimodal_utils.h"
+
 namespace xllm {
 
 Qwen2VLInputProcessor::Qwen2VLInputProcessor(const ModelArgs& args)
     : image_processor_(args), video_processor_(args) {}
 
 bool Qwen2VLInputProcessor::process(const MMInput& inputs, MMData& datas) {
-  for (const auto& input_item : inputs) {
-    std::vector<torch::Tensor> images;
-    std::vector<EmbeddingInput> images_embedding;
-    std::vector<torch::Tensor> videos;
-    std::vector<VideoMetadata> video_meta_list;
-    std::vector<torch::Tensor> audios;
-    std::vector<AudioMetadata> audio_meta_list;
+  std::vector<torch::Tensor> images = inputs.get_decode_data(MMType::IMAGE);
+  std::vector<torch::Tensor> videos = inputs.get_decode_data(MMType::VIDEO);
+  std::vector<VideoMetadata> video_meta_list = inputs.get_video_metadata();
 
+  for (const auto& input_item : inputs) {
     if (input_item.has_type(MMType::IMAGE)) {
+      auto& item = datas.add(MMType::IMAGE);
       if (input_item.is_embedding()) {
-        images_embedding.push_back(input_item.embedding);
-      } else {
-        images.push_back(input_item.decode_image);
+        item.set_data(process_image_embedding(input_item.embedding));
       }
     }
     if (input_item.has_type(MMType::VIDEO)) {
-      videos.push_back(input_item.decode_video);
-      video_meta_list.push_back(input_item.video_meta);
-    }
-    if (input_item.has_type(MMType::AUDIO)) {
-      audios.push_back(input_item.decode_audio);
-      audio_meta_list.push_back(input_item.audio_meta);
-    }
-
-    if (images_embedding.empty() && images.empty() &&
-        (videos.empty() || video_meta_list.empty()) &&
-        (audios.empty() || audio_meta_list.empty())) {
-      LOG(ERROR) << "no image/video/audio tensor or embedding found.";
-      return false;
-    }
-
-    if (!images_embedding.empty()) {
-      if (!this->process_images_embedding(images_embedding, datas)) {
-        LOG(ERROR) << " process embedding failed.";
-        return false;
-      }
-    }
-
-    if (!images.empty()) {
-      if (!this->process_images(images, datas)) {
-        LOG(ERROR) << " process image failed.";
-        return false;
-      }
-    }
-
-    if (!videos.empty()) {
-      if (!this->process_videos(videos, video_meta_list, datas)) {
-        LOG(ERROR) << " process video failed.";
-        return false;
-      }
+      datas.add(MMType::VIDEO);
     }
   }
+
+  PreprocessedMMItems items;
+  if (!images.empty() && !this->process_images(images, items.image_items)) {
+    LOG(ERROR) << " process image failed.";
+    return false;
+  }
+
+  if (!videos.empty() &&
+      !this->process_videos(videos, video_meta_list, items.video_items)) {
+    LOG(ERROR) << " process video failed.";
+    return false;
+  }
+
+  PreprocessOutputScatterVisitor scatter(items);
+  CHECK(datas.foreach (scatter))
+      << "scatter preprocess outputs failed during visit.";
+  CHECK(scatter.finish()) << "scatter preprocess outputs count mismatch.";
   return true;
 }
 
-bool Qwen2VLInputProcessor::process_images_embedding(
-    const std::vector<EmbeddingOutput>& images_embedding,
-    MMData& mm_datas) {
-  for (auto& output : images_embedding) {
-    auto& item = mm_datas.add(MMType::IMAGE);
-    MMDict data;
-    const auto& embeds = output.embedding.chunk(/*chunks*/ 4, /*dim*/ 0);
-    data["embedding"] = embeds[0];
-    for (size_t i = 0; i < 3; ++i) {
-      data[std::string("embedding|deepstack_") + std::to_string(i)] =
-          embeds[i + 1];
-    }
-    for (const auto& [key, value] : output.metadata) {
-      data[key] = value;
-    }
-    item.set_data(data);
+MMDict Qwen2VLInputProcessor::process_image_embedding(
+    const EmbeddingOutput& image_embedding) const {
+  MMDict data;
+  const auto& embeds = image_embedding.embedding.chunk(/*chunks*/ 4, /*dim*/ 0);
+  data["embedding"] = embeds[0];
+  for (size_t i = 0; i < 3; ++i) {
+    data[std::string("embedding|deepstack_") + std::to_string(i)] =
+        embeds[i + 1];
   }
-  return true;
+  for (const auto& [key, value] : image_embedding.metadata) {
+    data[key] = value;
+  }
+  return data;
 }
 
-bool Qwen2VLInputProcessor::process_images(std::vector<torch::Tensor> images,
-                                           MMData& mm_datas) {
-  torch::Tensor pixel_values;
-  torch::Tensor thw;
+bool Qwen2VLInputProcessor::process_images(
+    const std::vector<torch::Tensor>& images,
+    std::vector<MMDataItem>& image_items) {
+  std::vector<torch::Tensor> pixel_values_list(images.size());
+  std::vector<torch::Tensor> thw_list(images.size());
 
-  for (const auto& img : images) {
-    if (!image_processor_.process(img, pixel_values, thw)) {
+  const auto image_buckets = group_images_by_shape(images);
+  for (const auto& image_bucket : image_buckets) {
+    const ImageBatchBucket& bucket = image_bucket.second;
+    torch::Tensor batch_images = torch::stack(bucket.images);
+    torch::Tensor batch_pixel_values;
+    torch::Tensor batch_thw;
+    if (!image_processor_.process_batch(
+            batch_images, batch_pixel_values, batch_thw)) {
       LOG(ERROR)
-          << "Failed to process image. The shape(channels, height, width) is: "
-          << img.sizes();
+          << "Failed to process image batch. The shape(channels, height, "
+             "width) is: "
+          << batch_images[0].sizes();
       return false;
     }
 
-    auto& item = mm_datas.add(MMType::IMAGE);
-    item.set_data({{"pixel_values", pixel_values}, {"image_grid_thw", thw}});
+    std::vector<torch::Tensor> bucket_pixel_values =
+        batch_pixel_values.unbind(0);
+    std::vector<torch::Tensor> bucket_thw = batch_thw.unbind(0);
+    const size_t bucket_size = bucket.indices.size();
+    for (size_t index = 0; index < bucket_size; ++index) {
+      const size_t output_index = bucket.indices[index];
+      pixel_values_list[output_index] = std::move(bucket_pixel_values[index]);
+      thw_list[output_index] = std::move(bucket_thw[index]);
+    }
+  }
+
+  image_items.clear();
+  image_items.reserve(images.size());
+  for (size_t index = 0; index < images.size(); ++index) {
+    image_items.emplace_back(MMType::IMAGE,
+                             MMDict{{"pixel_values", pixel_values_list[index]},
+                                    {"image_grid_thw", thw_list[index]}});
   }
 
   return true;
 }
 
 bool Qwen2VLInputProcessor::process_videos(
-    std::vector<torch::Tensor> videos,
-    std::vector<VideoMetadata> video_meta_list,
-    MMData& mm_datas) {
+    const std::vector<torch::Tensor>& videos,
+    const std::vector<VideoMetadata>& video_meta_list,
+    std::vector<MMDataItem>& video_items) {
   torch::Tensor pixel_values;
   torch::Tensor thw;
 
   auto opts = torch::TensorOptions().dtype(torch::kFloat32);
 
+  video_items.clear();
+  video_items.reserve(videos.size());
   const size_t video_size = videos.size();
   for (size_t i = 0; i < video_size; ++i) {
-    auto& vid = videos[i];
-    auto& metadata = video_meta_list[i];
+    const auto& vid = videos[i];
+    auto metadata = video_meta_list[i];
     if (!video_processor_.process(vid, metadata, pixel_values, thw)) {
       LOG(ERROR) << "Failed to process video. The shape(num_frames, channels, "
                     "height, width) is: "
@@ -141,13 +144,11 @@ bool Qwen2VLInputProcessor::process_videos(
     double seconds_per_grid =
         static_cast<double>(video_processor_.temporal_patch_size()) / fps;
     auto second_per_grid_ts = torch::tensor({seconds_per_grid}, opts);
-
-    auto& item = mm_datas.add(MMType::VIDEO);
-    item.set_data({{"pixel_values_videos", pixel_values},
-                   {"video_grid_thw", thw},
-                   {"second_per_grid_ts", second_per_grid_ts}});
-
-    item.set_metadata(metadata);
+    video_items.emplace_back(MMType::VIDEO,
+                             MMDict{{"pixel_values_videos", pixel_values},
+                                    {"video_grid_thw", thw},
+                                    {"second_per_grid_ts", second_per_grid_ts}},
+                             metadata);
   }
 
   return true;

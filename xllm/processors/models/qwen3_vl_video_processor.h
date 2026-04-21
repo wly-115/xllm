@@ -62,8 +62,8 @@ class Qwen3VLVideoProcessor {
   bool do_rescale_ = true;
   bool do_resize_ = true;
 
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
+  torch::Tensor image_mean_;
+  torch::Tensor image_std_;
 
   int32_t merge_size_ = 2;
   int32_t patch_size_ = 14;

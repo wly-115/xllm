@@ -151,6 +151,36 @@ bool EncoderOutputScatterVisitor::finish() const {
   return true;
 }
 
+bool PreprocessOutputScatterVisitor::visit(MMDataItem& item) {
+  if (item.type() == MMType::IMAGE) {
+    if (item.is_embedded()) {
+      return true;
+    }
+    if (image_idx >= static_cast<int32_t>(items_.image_items.size())) {
+      return false;
+    }
+    item = items_.image_items[image_idx];
+    ++image_idx;
+    return true;
+  }
+
+  if (item.type() == MMType::VIDEO) {
+    if (video_idx >= static_cast<int32_t>(items_.video_items.size())) {
+      return false;
+    }
+    item = items_.video_items[video_idx];
+    ++video_idx;
+    return true;
+  }
+
+  return true;
+}
+
+bool PreprocessOutputScatterVisitor::finish() const {
+  return image_idx == static_cast<int32_t>(items_.image_items.size()) &&
+         video_idx == static_cast<int32_t>(items_.video_items.size());
+}
+
 bool EncoderEmbeddingGatherVisitor::visit(MMDataItem& item) {
   const auto& state = item.state();
 

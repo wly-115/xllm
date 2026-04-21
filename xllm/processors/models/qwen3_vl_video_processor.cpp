@@ -24,22 +24,18 @@ limitations under the License.
 namespace xllm {
 
 Qwen3VLVideoProcessor::Qwen3VLVideoProcessor(const ModelArgs& args) {
-  image_mean_ = args.mm_image_normalize_mean();
-  image_std_ = args.mm_image_normalize_std();
+  image_mean_ = torch::tensor(args.mm_image_normalize_mean(),
+                              torch::dtype(torch::kFloat32));
+  image_std_ = torch::tensor(args.mm_image_normalize_std(),
+                             torch::dtype(torch::kFloat32));
   patch_size_ = args.mm_image_patch_size();
   temporal_patch_size_ = args.mm_image_temporal_patch_size();
   merge_size_ = args.mm_image_merge_size();
   size_ = {{"longest_edge", 12845056}, {"shortest_edge", 3136}};
 
   if (do_rescale_ && do_normalize_) {
-    for (auto& item : image_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : image_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
+    image_mean_.mul_(1.0 / rescale_factor_);
+    image_std_.mul_(1.0 / rescale_factor_);
     do_rescale_ = false;
   }
 }
@@ -191,14 +187,13 @@ bool Qwen3VLVideoProcessor::process(torch::Tensor origin_video,
   auto resized_width = shape[3];
 
   if (do_resize_) {
-    auto size =
-        smart_resize(static_cast<int32_t>(video.size(0)),
-                     static_cast<int32_t>(resized_height),
-                     static_cast<int32_t>(resized_width),
-                     temporal_patch_size_,
-                     patch_size_ * merge_size_,
-                     size_.at("shortest_edge"),
-                     size_.at("longest_edge"));
+    auto size = smart_resize(static_cast<int32_t>(video.size(0)),
+                             static_cast<int32_t>(resized_height),
+                             static_cast<int32_t>(resized_width),
+                             temporal_patch_size_,
+                             patch_size_ * merge_size_,
+                             size_.at("shortest_edge"),
+                             size_.at("longest_edge"));
     if (!size) {
       return false;
     }
