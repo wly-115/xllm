@@ -65,8 +65,10 @@ std::optional<Size> smart_resize(int height,
 }  // namespace
 
 Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
-  image_mean_ = args.mm_image_normalize_mean();
-  image_std_ = args.mm_image_normalize_std();
+  image_mean_ = torch::tensor(args.mm_image_normalize_mean(),
+                              torch::dtype(torch::kFloat32));
+  image_std_ = torch::tensor(args.mm_image_normalize_std(),
+                             torch::dtype(torch::kFloat32));
   if (args.mm_image_max_pixels() && args.mm_image_min_pixels()) {
     min_pixels_ = args.mm_image_min_pixels();
     max_pixels_ = args.mm_image_max_pixels();
@@ -79,14 +81,8 @@ Qwen2VLImageProcessor::Qwen2VLImageProcessor(const ModelArgs& args) {
   merge_size_ = args.mm_image_merge_size();
 
   if (do_rescale_ && do_normalize_) {
-    for (auto& item : image_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : image_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
+    image_mean_.mul_(1.0 / rescale_factor_);
+    image_std_.mul_(1.0 / rescale_factor_);
     do_rescale_ = false;
   }
 }
@@ -110,7 +106,7 @@ bool Qwen2VLImageProcessor::process(torch::Tensor image,
 
     std::tie(resized_height, resized_width) = *size;
     image = transforms::resize(
-        image, {resized_height, resized_width}, resample_, true);
+        image, {resized_height, resized_width}, resample_, false);
   }
 
   if (do_normalize_) {
@@ -148,7 +144,7 @@ bool Qwen2VLImageProcessor::process(torch::Tensor image,
        channel * temporal_patch_size_ * patch_size_ * patch_size_});
 
   pixel_values = patches;
-  thw = torch::tensor({grid_t, grid_h, grid_w}).clone().reshape({-1, 3});
+  thw = torch::tensor({grid_t, grid_h, grid_w}).reshape({-1, 3});
 
   return true;
 }

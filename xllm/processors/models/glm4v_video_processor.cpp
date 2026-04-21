@@ -86,8 +86,10 @@ std::optional<Size> smart_resize(int32_t num_frames,
 }  // namespace
 
 Glm4VVideoProcessor::Glm4VVideoProcessor(const ModelArgs& args) {
-  video_mean_ = args.mm_video_normalize_mean();
-  video_std_ = args.mm_video_normalize_std();
+  video_mean_ = torch::tensor(args.mm_video_normalize_mean(),
+                              torch::dtype(torch::kFloat32));
+  video_std_ = torch::tensor(args.mm_video_normalize_std(),
+                             torch::dtype(torch::kFloat32));
 
   video_min_pixels_ = args.mm_video_shortest_edge();
   video_max_pixels_ = args.mm_video_longest_edge();
@@ -97,14 +99,8 @@ Glm4VVideoProcessor::Glm4VVideoProcessor(const ModelArgs& args) {
   video_merge_size_ = args.mm_video_merge_size();
 
   if (do_rescale_ && do_normalize_) {
-    for (auto& item : video_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : video_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
+    video_mean_.mul_(1.0 / rescale_factor_);
+    video_std_.mul_(1.0 / rescale_factor_);
     do_rescale_ = false;
   }
 }
@@ -319,7 +315,7 @@ bool Glm4VVideoProcessor::process(torch::Tensor origin_video,
                                  video_patch_size_ * video_patch_size_});
 
   pixel_values = patches;
-  thw = torch::tensor({grid_t, grid_h, grid_w}).clone().reshape({-1, 3});
+  thw = torch::tensor({grid_t, grid_h, grid_w}).reshape({-1, 3});
 
   return true;
 }

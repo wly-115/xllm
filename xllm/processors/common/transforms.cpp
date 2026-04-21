@@ -47,9 +47,8 @@ torch::Tensor resize(const torch::Tensor& image,
       LOG(FATAL) << "Invalid resample value. Must be one of 1, 2, or 3.";
   }
   auto input = image.dim() == 3 ? image.unsqueeze(0) : image;
-  auto resized = torch::nn::functional::interpolate(input, options)
-                     .clamp(0, 255)
-                     .to(torch::kUInt8);
+  auto resized =
+      torch::nn::functional::interpolate(input, options).clamp(0, 255);
   return image.dim() == 3 ? resized.squeeze(0) : resized;
 }
 
@@ -105,16 +104,17 @@ torch::Tensor rescale(const torch::Tensor& image, double scale) {
 }
 
 torch::Tensor normalize(const torch::Tensor& image,
-                        const std::vector<double>& mean,
-                        const std::vector<double>& std) {
+                        const torch::Tensor& mean,
+                        const torch::Tensor& std) {
   if (image.dim() != 3 && image.dim() != 4) {
     LOG(FATAL) << "Input image must be a 3D or 4D tensor "
                << "((C, H, W) or (N, C, H, W)).";
   }
 
   int32_t num_channels = image.dim() == 3 ? image.size(0) : image.size(1);
-  if (mean.size() != num_channels || std.size() != num_channels) {
-    LOG(FATAL) << "Mean and std vectors must have the same number "
+  if (mean.dim() != 1 || std.dim() != 1 || mean.size(0) != num_channels ||
+      std.size(0) != num_channels) {
+    LOG(FATAL) << "Mean and std tensors must have the same number "
                << "of elements as the number of channels in the "
                << "image.";
   }
@@ -129,8 +129,8 @@ torch::Tensor normalize(const torch::Tensor& image,
 
   auto mean_shape = image.dim() == 3 ? std::vector<int64_t>{-1, 1, 1}
                                      : std::vector<int64_t>{1, -1, 1, 1};
-  auto mean_tensor = torch::tensor(mean, options).reshape(mean_shape);
-  auto std_tensor = torch::tensor(std, options).reshape(mean_shape);
+  auto mean_tensor = mean.to(options).reshape(mean_shape);
+  auto std_tensor = std.to(options).reshape(mean_shape);
 
   result = result.sub(mean_tensor);
   return result.div_(std_tensor);

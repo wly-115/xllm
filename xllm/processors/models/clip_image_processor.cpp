@@ -29,18 +29,14 @@ CLIPImageProcessor::CLIPImageProcessor(const ModelArgs& args) {
                               args.mm_image_crop_width_size());
   resample_ = args.mm_image_resample();
   rescale_factor_ = args.mm_image_rescale_factor();
-  image_mean_ = args.mm_image_normalize_mean();
-  image_std_ = args.mm_image_normalize_std();
+  image_mean_ = torch::tensor(args.mm_image_normalize_mean(),
+                              torch::dtype(torch::kFloat32));
+  image_std_ = torch::tensor(args.mm_image_normalize_std(),
+                             torch::dtype(torch::kFloat32));
 
   if (do_rescale_ && do_normalize_) {
-    for (auto& item : image_mean_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
-    for (auto& item : image_std_) {
-      item = item * (1.0 / rescale_factor_);
-    }
-
+    image_mean_.mul_(1.0 / rescale_factor_);
+    image_std_.mul_(1.0 / rescale_factor_);
     do_rescale_ = false;
   }
 }

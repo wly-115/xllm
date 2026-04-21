@@ -25,16 +25,12 @@ MiniCPMVImageProcessor::MiniCPMVImageProcessor(const ModelArgs& args) {
   patch_size_ = args.mm_patch_size();
   slice_mode_ = args.mm_slice_mode();
   image_feature_size_ = args.mm_image_feature_size();
-  norm_mean_ = args.mm_image_normalize_mean();
-  norm_std_ = args.mm_image_normalize_std();
-
-  for (auto& item : norm_mean_) {
-    item *= 255.0;
-  }
-
-  for (auto& item : norm_std_) {
-    item *= 255.0;
-  }
+  norm_mean_ = torch::tensor(args.mm_image_normalize_mean(),
+                             torch::dtype(torch::kFloat32));
+  norm_std_ = torch::tensor(args.mm_image_normalize_std(),
+                            torch::dtype(torch::kFloat32));
+  norm_mean_.mul_(255.0);
+  norm_std_.mul_(255.0);
 }
 
 bool MiniCPMVImageProcessor::process(

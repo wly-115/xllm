@@ -75,7 +75,6 @@ bool MultimodalProcessor::preprocess(const std::vector<Message>& messages,
     LOG(ERROR) << "multimodal processor process failed.";
     return false;
   }
-
   Timer timer;
   auto rendered_prompt = chat_template_->apply(messages);
   if (!rendered_prompt.has_value()) {

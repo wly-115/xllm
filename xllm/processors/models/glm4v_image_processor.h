@@ -36,8 +36,8 @@ class Glm4VImageProcessor {
   bool do_rescale_ = true;
   bool do_resize_ = true;
 
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
+  torch::Tensor image_mean_;
+  torch::Tensor image_std_;
 
   int max_pixels_ = 12845056;
   int min_pixels_ = 3136;

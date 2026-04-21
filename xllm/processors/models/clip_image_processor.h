@@ -43,8 +43,8 @@ class CLIPImageProcessor {
   int32_t resample_;
   double rescale_factor_;
   std::pair<int32_t, int32_t> crop_size_;
-  std::vector<double> image_mean_;
-  std::vector<double> image_std_;
+  torch::Tensor image_mean_;
+  torch::Tensor image_std_;
 };
 
 }  // namespace xllm

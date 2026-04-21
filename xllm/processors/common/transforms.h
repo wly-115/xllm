@@ -34,7 +34,7 @@ torch::Tensor center_crop(const torch::Tensor& image,
 torch::Tensor rescale(const torch::Tensor& image, double scale);
 
 torch::Tensor normalize(const torch::Tensor& image,
-                        const std::vector<double>& mean,
-                        const std::vector<double>& std);
+                        const torch::Tensor& mean,
+                        const torch::Tensor& std);
 
 }  // namespace xllm::transforms

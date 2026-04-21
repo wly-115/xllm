@@ -894,13 +894,6 @@ class LongCatImageEditPipelineImpl : public torch::nn::Module {
                            {calculated_height, calculated_width},
                            /*resample=*/3,  // BICUBIC (approximate LANCZOS)
                            /*antialias=*/true);
-    // Ensure float32 before second resize: CUDA bicubic antialias kernel does
-    // not support uint8. The first resize may return uint8 when the input is
-    // uint8 (multimodal_input_processor.cpp restores the original dtype on
-    // output).
-    if (!prompt_image.is_floating_point()) {
-      prompt_image = prompt_image.to(torch::kFloat32);
-    }
     // Step 2: resize to half resolution for VL text encoder (matches diffusers:
     //   prompt_image = self.image_processor.resize(image, calc_h//2,
     //   calc_w//2))

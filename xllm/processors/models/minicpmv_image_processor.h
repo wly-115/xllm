@@ -84,8 +84,8 @@ class MiniCPMVImageProcessor {
   int32_t scale_resolution_;
   int32_t patch_size_;
   int32_t image_feature_size_;
-  std::vector<double> norm_mean_;
-  std::vector<double> norm_std_;
+  torch::Tensor norm_mean_;
+  torch::Tensor norm_std_;
 };
 
 }  // namespace xllm

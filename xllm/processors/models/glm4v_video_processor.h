@@ -43,8 +43,8 @@ class Glm4VVideoProcessor {
   bool do_rescale_ = true;
   bool do_resize_ = true;
 
-  std::vector<double> video_mean_;
-  std::vector<double> video_std_;
+  torch::Tensor video_mean_;
+  torch::Tensor video_std_;
 
   int32_t video_max_pixels_ = 47040000;
   int32_t video_min_pixels_ = 12544;
