@@ -15,6 +15,8 @@ limitations under the License.
 
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -187,6 +189,7 @@ inline const char* MMErrToString(MMErrCode code) {
 }
 
 class MMHandlerSet;
+class ThreadPool;
 class MMInputTransfer {
  public:
   MMInputTransfer();
@@ -200,6 +203,7 @@ class MMInputTransfer {
                   MMPayload& payload);
 
   std::unique_ptr<MMHandlerSet> mm_handlers_;
+  std::unique_ptr<ThreadPool> threadpool_;
 };
 
 }  // namespace xllm

@@ -236,13 +236,35 @@ MMErrCode MMHandlerSet::process(const std::string& type,
                                 const MMContent& content,
                                 MMInputItem& input,
                                 MMPayload& payload) {
+  MMErrCode code = load(type, content, input, payload);
+  if (code != MMErrCode::SUCCESS) {
+    return code;
+  }
+
+  return decode(type, input);
+}
+
+MMErrCode MMHandlerSet::load(const std::string& type,
+                             const MMContent& content,
+                             MMInputItem& input,
+                             MMPayload& payload) {
   auto itor = handlers_.find(type);
   if (itor == handlers_.end()) {
     return MMErrCode::HANDLER_ERR;
   }
 
   auto& handler = itor->second;
-  return handler->process(content, input, payload);
+  return handler->load(content, input, payload);
+}
+
+MMErrCode MMHandlerSet::decode(const std::string& type, MMInputItem& input) {
+  auto itor = handlers_.find(type);
+  if (itor == handlers_.end()) {
+    return MMErrCode::HANDLER_ERR;
+  }
+
+  auto& handler = itor->second;
+  return handler->decode(input);
 }
 
 }  // namespace xllm
