@@ -120,19 +120,33 @@ CollectiveCommunicator::CollectiveCommunicator(int global_rank,
 void CollectiveCommunicator::create_process_groups(
     const std::string& master_addr,
     const torch::Device& device) {
+  std::string host;
+  int32_t port;
+  net::parse_host_port_from_addr(master_addr, host, port);
+
+  int32_t global_rank = parallel_args_->rank();
+  int32_t world_size = parallel_args_->world_size();
+  int32_t dp_size = parallel_args_->dp_size();
+  int32_t ep_size = parallel_args_->ep_size();
 #if defined(USE_NPU)
   if (FLAGS_npu_kernel_backend == "ATB") {
+    if (FLAGS_enable_mm_encoder_dp) {
+      const int32_t encoder_dp_size = world_size / dp_size;
+      const int32_t port_offset = global_rank / encoder_dp_size + 1;
+      encoder_dp_group_ = create_process_group(global_rank,
+                                               world_size,
+                                               encoder_dp_size,
+                                               port + port_offset,
+                                               false,
+                                               host,
+                                               "encoder_dp_group",
+                                               device);
+      parallel_args_->encoder_dp_group_ = encoder_dp_group_.get();
+    }
     return;
   }
 #endif
-  std::string host;
-  int port;
-  net::parse_host_port_from_addr(master_addr, host, port);
 
-  int global_rank = parallel_args_->rank();
-  int world_size = parallel_args_->world_size();
-  int dp_size = parallel_args_->dp_size();
-  int ep_size = parallel_args_->ep_size();
   process_group_ = create_process_group(global_rank,
                                         world_size,
                                         world_size,
@@ -143,9 +157,9 @@ void CollectiveCommunicator::create_process_groups(
                                         device);
   parallel_args_->process_group_ = process_group_.get();
 
-  int tp_size = world_size / dp_size;
+  int32_t tp_size = world_size / dp_size;
   CHECK_EQ(tp_size * dp_size, world_size);
-  int port_offset = global_rank / tp_size + 1;
+  int32_t port_offset = global_rank / tp_size + 1;
   tp_group_ = create_process_group(global_rank,
                                    world_size,
                                    tp_size,

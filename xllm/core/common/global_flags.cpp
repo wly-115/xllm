@@ -693,6 +693,11 @@ DEFINE_uint32(rec_worker_max_concurrency,
               "equal to 1 means disable concurrent rec worker.");
 
 #if defined(USE_NPU)
+DEFINE_bool(enable_mm_encoder_dp,
+            false,
+            "Enable item-level sharding for multimodal encoder across "
+            "tensor-parallel NPU ranks.");
+
 DEFINE_string(npu_kernel_backend,
               "AUTO",
               "NPU kernel backend. Supported options: AUTO, ATB, TORCH.");

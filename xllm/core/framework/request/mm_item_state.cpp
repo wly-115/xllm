@@ -26,7 +26,7 @@ bool MMItemState::prefix_complete_cached() const {
     return false;
   }
 
-  return prefix_cache_.cached_token_num == token_pos_.length;
+  return prefix_cache_.cached_token_num == mm_token_num_;
 }
 
 }  // namespace xllm

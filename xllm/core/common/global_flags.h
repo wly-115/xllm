@@ -331,6 +331,8 @@ DECLARE_bool(use_audio_in_video);
 DECLARE_uint32(rec_worker_max_concurrency);
 
 #if defined(USE_NPU)
+DECLARE_bool(enable_mm_encoder_dp);
+
 DECLARE_string(npu_kernel_backend);
 
 DECLARE_bool(enable_intralayer_addnorm);

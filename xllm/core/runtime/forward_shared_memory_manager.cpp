@@ -249,10 +249,11 @@ inline size_t get_mm_item_size(const MMDataItem& mm_item) {
 
   // token_pos
   total += type_size<uint32_t> * 2;
+  total += type_size<int32_t>;  // mm_token_num
 
   // prefix_cache
   total += XXH3_128BITS_HASH_VALUE_LEN;
-  total += type_size<uint32_t>;
+  total += type_size<int32_t>;
 
   return total;
 }
@@ -853,6 +854,7 @@ inline void write_mm_item(char*& buffer, const MMDataItem& item) {
   // write token_pos
   write_data(buffer, state.token_pos().offset);
   write_data(buffer, state.token_pos().length);
+  write_data(buffer, state.mm_token_num());
 
   // write prefix_cache
   memcpy(buffer, state.prefix_cache().key.data, XXH3_128BITS_HASH_VALUE_LEN);
@@ -868,6 +870,7 @@ inline void write_mm_item(RawInputSerializeContext& context,
   const auto& state = item.state();
   write_data(context.descriptor, state.token_pos().offset);
   write_data(context.descriptor, state.token_pos().length);
+  write_data(context.descriptor, state.mm_token_num());
   write_bytes(context.descriptor,
               state.prefix_cache().key.data,
               XXH3_128BITS_HASH_VALUE_LEN);
@@ -1642,6 +1645,7 @@ inline void read_mm_item(const char*& buffer,
   // read token_pos
   read_data(buffer, state.mutable_token_pos().offset, device_buffer);
   read_data(buffer, state.mutable_token_pos().length, device_buffer);
+  read_data(buffer, state.mutable_mm_token_num(), device_buffer);
 
   // read prefix_cache
   std::memcpy(state.mutable_prefix_cache().key.data,
@@ -1664,6 +1668,7 @@ inline void read_mm_item(ReadContext& context, MMDataItem& item) {
 
   read_data(context, state.mutable_token_pos().offset);
   read_data(context, state.mutable_token_pos().length);
+  read_data(context, state.mutable_mm_token_num());
 
   std::memcpy(state.mutable_prefix_cache().key.data,
               context.descriptor_cursor,

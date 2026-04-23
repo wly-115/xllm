@@ -33,11 +33,14 @@ struct MMItemState {
 
   struct PrefixCache {
     XXH3Key key;
-    uint32_t cached_token_num = 0;
+    int32_t cached_token_num = 0;
   };
 
   const TokenPos& token_pos() const { return token_pos_; }
   TokenPos& mutable_token_pos() { return token_pos_; }
+
+  int32_t mm_token_num() const { return mm_token_num_; }
+  int32_t& mutable_mm_token_num() { return mm_token_num_; }
 
   const PrefixCache& prefix_cache() const { return prefix_cache_; }
   PrefixCache& mutable_prefix_cache() { return prefix_cache_; }
@@ -47,6 +50,7 @@ struct MMItemState {
 
  private:
   TokenPos token_pos_;
+  int32_t mm_token_num_ = 0;
   PrefixCache prefix_cache_;
 };
 
