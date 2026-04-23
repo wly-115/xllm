@@ -58,7 +58,7 @@ const OptionCategory kCacheOptions = {"KV CACHE OPTIONS",
 
 const OptionCategory kMoeModelOptions = {
     "MOE MODEL OPTIONS",
-    {"dp_size", "ep_size", "expert_parallel_degree"}};
+    {"dp_size", "ep_size", "expert_parallel_degree", "enable_mm_encoder_dp"}};
 
 const OptionCategory kDiTModelOptions = {
     "DiT MODEL OPTIONS",

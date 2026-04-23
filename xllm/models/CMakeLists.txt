@@ -14,8 +14,10 @@ cc_library(
     models.h
   SRCS
     model_registry.cpp
+    vlm/encoder_utils.cpp
   DEPS
     :model
+    :parallel_state
     :model_context
     :dit_cache
     :model_loader

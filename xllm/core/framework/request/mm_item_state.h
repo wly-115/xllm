@@ -43,6 +43,9 @@ struct MMItemState {
   const torch::Tensor& mm_token_mask() const { return mm_token_mask_; }
   torch::Tensor& mutable_mm_token_mask() { return mm_token_mask_; }
 
+  int32_t mm_token_num() const { return mm_token_num_; }
+  int32_t& mutable_mm_token_num() { return mm_token_num_; }
+
   const ScheduleData& schedule_data() const { return schedule_data_; }
   ScheduleData& mutable_schedule_data() { return schedule_data_; }
 
@@ -51,6 +54,7 @@ struct MMItemState {
  private:
   TokenPos token_pos_;
   torch::Tensor mm_token_mask_;
+  int32_t mm_token_num_ = 0;
   ScheduleData schedule_data_;
 };
 
