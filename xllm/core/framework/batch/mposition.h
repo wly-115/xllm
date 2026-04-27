@@ -17,38 +17,46 @@ limitations under the License.
 
 #include <torch/torch.h>
 
+#include <cstdint>
 #include <limits>
+#include <memory>
+#include <tuple>
 #include <vector>
 
 namespace xllm {
 
 class Sequence;
+enum class MPositionType : int8_t;
 struct ModelArgs;
+
+class MPositionGenerator {
+ public:
+  virtual ~MPositionGenerator() = default;
+
+  virtual std::tuple<torch::Tensor, int32_t> generate(
+      Sequence& sequence,
+      const ModelArgs& model_args) const = 0;
+};
+
+std::unique_ptr<MPositionGenerator> create_mposition_generator(
+    MPositionType mposition_type);
 
 class MPositionHelper {
  public:
-  MPositionHelper(Sequence& seq, const ModelArgs& args)
-      : seq_(seq), args_(args) {}
+  MPositionHelper(Sequence& seq,
+                  const ModelArgs& args,
+                  std::unique_ptr<MPositionGenerator> generator)
+      : seq_(seq), args_(args), generator_(std::move(generator)) {}
 
   torch::Tensor get_positions();
 
  private:
-  std::tuple<torch::Tensor, int32_t> get_positions_p(
-      torch::Tensor image_grid_thw,
-      torch::Tensor video_grid_thw,
-      torch::Tensor second_per_grid_ts);
-  std::tuple<torch::Tensor, int32_t> get_positions_qwen3(
-      torch::Tensor image_grid_thw,
-      torch::Tensor video_grid_thw);
-  std::tuple<torch::Tensor, int32_t> get_positions_glm(
-      torch::Tensor image_grid_thw,
-      torch::Tensor video_grid_thw);
-
   torch::Tensor get_positions_d();
 
  private:
   Sequence& seq_;
   const ModelArgs& args_;
+  std::unique_ptr<MPositionGenerator> generator_;
 };
 
 }  // namespace xllm

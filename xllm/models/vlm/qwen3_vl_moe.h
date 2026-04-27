@@ -201,6 +201,7 @@ REGISTER_IMAGE_PROCESSOR(qwen3_vl_moe, Qwen2VLImageProcessor);
 REGISTER_MODEL_ARGS(qwen3_vl_moe, [&] {
   // text config
   LOAD_ARG_OR(model_type, "model_type", "qwen3_vl_moe");
+  args->mposition_type() = MPositionType::QWEN3_VL;
   LOAD_ARG_OR(attention_bias, "text_config.attention_bias", false);
   LOAD_ARG_OR(attention_dropout, "attention_dropout", 0.0f);
   LOAD_ARG_OR(bos_token_id, "text_config.bos_token_id", 151643);

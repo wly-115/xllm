@@ -15,7 +15,8 @@ limitations under the License.
 
 #include "mposition.h"
 
-#include <absl/strings/match.h>
+#include <algorithm>
+#include <string>
 
 #include "framework/model/model_args.h"
 #include "framework/request/sequence.h"
@@ -23,10 +24,12 @@ limitations under the License.
 namespace xllm {
 
 namespace {
-std::vector<std::tuple<std::string, int32_t, int32_t>> groupByTokenType(
+std::vector<std::tuple<std::string, int32_t, int32_t>> group_by_token_type(
     const std::vector<std::string>& token_types) {
   std::vector<std::tuple<std::string, int32_t, int32_t>> groups;
-  if (token_types.empty()) return groups;
+  if (token_types.empty()) {
+    return groups;
+  }
 
   std::string current_key = token_types[0];
   int32_t start = 0;
@@ -42,49 +45,74 @@ std::vector<std::tuple<std::string, int32_t, int32_t>> groupByTokenType(
       current_key, start, static_cast<int32_t>(token_types.size()));
   return groups;
 }
-}  // namespace
 
-torch::Tensor MPositionHelper::get_positions() {
-  // if (seq_.is_chunked_prefill_stage()) {
-  if (seq_.kv_state().kv_cache_tokens_num() < seq_.num_prompt_tokens()) {
-    auto& mm_data = seq_.get_mm_data();
-
-    torch::Tensor image_grid_thw;
-    if (auto res = mm_data.get<torch::Tensor>("image_grid_thw"))
-      image_grid_thw = res.value();
-
-    torch::Tensor video_grid_thw;
-    if (auto res = mm_data.get<torch::Tensor>("video_grid_thw"))
-      video_grid_thw = res.value();
-
-    torch::Tensor second_per_grid_ts;
-    if (auto res = mm_data.get<torch::Tensor>("second_per_grid_ts"))
-      second_per_grid_ts = res.value();
-    std::tuple<torch::Tensor, int32_t> res;
-    if (absl::StartsWith(args_.model_type(), "glm4v")) {
-      res = get_positions_glm(image_grid_thw, video_grid_thw);
-    } else if (absl::StartsWith(args_.model_type(), "qwen3_vl")) {
-      res = get_positions_qwen3(image_grid_thw, video_grid_thw);
-    } else {
-      res = get_positions_p(image_grid_thw, video_grid_thw, second_per_grid_ts);
-    }
-
-    seq_.set_mrope_position_delta(std::get<1>(res));
-    return std::get<0>(res);
-  } else {
-    return get_positions_d();
+torch::Tensor get_mm_tensor(Sequence& sequence, const std::string& key) {
+  auto& mm_data = sequence.get_mm_data();
+  torch::Tensor tensor;
+  if (auto result = mm_data.get<torch::Tensor>(key)) {
+    tensor = result.value();
   }
+  return tensor;
 }
 
-std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_glm(
-    torch::Tensor image_grid_thw,
-    torch::Tensor video_grid_thw) {
-  auto input_tokens = seq_.tokens();
-  auto spatial_merge_size = args_.mm_spatial_merge_size();
-  auto image_token_id = args_.image_token_id();
-  auto video_token_id = args_.video_token_id();
-  auto video_start_token_id = args_.video_start_token_id();
-  auto video_end_token_id = args_.video_end_token_id();
+class Qwen25VLMPositionGenerator final : public MPositionGenerator {
+ public:
+  std::tuple<torch::Tensor, int32_t> generate(
+      Sequence& sequence,
+      const ModelArgs& model_args) const override;
+};
+
+class Qwen3VLMPositionGenerator final : public MPositionGenerator {
+ public:
+  std::tuple<torch::Tensor, int32_t> generate(
+      Sequence& sequence,
+      const ModelArgs& model_args) const override;
+};
+
+class Glm4VMPositionGenerator final : public MPositionGenerator {
+ public:
+  std::tuple<torch::Tensor, int32_t> generate(
+      Sequence& sequence,
+      const ModelArgs& model_args) const override;
+};
+}  // namespace
+
+std::unique_ptr<MPositionGenerator> create_mposition_generator(
+    MPositionType mposition_type) {
+  switch (mposition_type) {
+    case MPositionType::QWEN3_VL:
+      return std::make_unique<Qwen3VLMPositionGenerator>();
+    case MPositionType::GLM4V:
+      return std::make_unique<Glm4VMPositionGenerator>();
+    case MPositionType::QWEN2_5_VL:
+      return std::make_unique<Qwen25VLMPositionGenerator>();
+  }
+
+  return std::make_unique<Qwen25VLMPositionGenerator>();
+}
+
+torch::Tensor MPositionHelper::get_positions() {
+  if (seq_.kv_state().kv_cache_tokens_num() >= seq_.num_prompt_tokens()) {
+    return get_positions_d();
+  }
+
+  CHECK(generator_ != nullptr);
+  std::tuple<torch::Tensor, int32_t> result = generator_->generate(seq_, args_);
+  seq_.set_mrope_position_delta(std::get<1>(result));
+  return std::get<0>(result);
+}
+
+std::tuple<torch::Tensor, int32_t> Glm4VMPositionGenerator::generate(
+    Sequence& sequence,
+    const ModelArgs& model_args) const {
+  torch::Tensor image_grid_thw = get_mm_tensor(sequence, "image_grid_thw");
+  torch::Tensor video_grid_thw = get_mm_tensor(sequence, "video_grid_thw");
+  auto input_tokens = sequence.tokens();
+  auto spatial_merge_size = model_args.mm_spatial_merge_size();
+  auto image_token_id = model_args.image_token_id();
+  auto video_token_id = model_args.video_token_id();
+  auto video_start_token_id = model_args.video_start_token_id();
+  auto video_end_token_id = model_args.video_end_token_id();
 
   auto dtype = torch::kInt32;
 
@@ -108,7 +136,7 @@ std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_glm(
       input_token_type.push_back("text");
     }
   }
-  auto input_type_group = groupByTokenType(input_token_type);
+  auto input_type_group = group_by_token_type(input_token_type);
   int32_t image_index = 0;
   int32_t video_index = 0;
   int32_t video_group_index = 0;
@@ -187,17 +215,20 @@ std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_glm(
   return std::make_pair(llm_positions, mrope_position_delta);
 }
 
-std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_p(
-    torch::Tensor image_grid_thw,
-    torch::Tensor video_grid_thw,
-    torch::Tensor second_per_grid_ts) {
-  auto image_token_id = args_.image_token_id();
-  auto video_token_id = args_.video_token_id();
-  auto vision_start_token_id = args_.vision_start_token_id();
-  auto spatial_merge_size = args_.mm_spatial_merge_size();
-  auto tokens_per_second = args_.mm_tokens_per_second();
+std::tuple<torch::Tensor, int32_t> Qwen25VLMPositionGenerator::generate(
+    Sequence& sequence,
+    const ModelArgs& model_args) const {
+  torch::Tensor image_grid_thw = get_mm_tensor(sequence, "image_grid_thw");
+  torch::Tensor video_grid_thw = get_mm_tensor(sequence, "video_grid_thw");
+  torch::Tensor second_per_grid_ts =
+      get_mm_tensor(sequence, "second_per_grid_ts");
+  auto image_token_id = model_args.image_token_id();
+  auto video_token_id = model_args.video_token_id();
+  auto vision_start_token_id = model_args.vision_start_token_id();
+  auto spatial_merge_size = model_args.mm_spatial_merge_size();
+  auto tokens_per_second = model_args.mm_tokens_per_second();
 
-  auto input_tokens = seq_.tokens();
+  auto input_tokens = sequence.tokens();
   auto input_tokens_tensor =
       torch::tensor(std::vector<int32_t>(input_tokens), torch::kInt32);
   auto vision_start_indices =
@@ -316,13 +347,15 @@ std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_p(
   return std::make_tuple(llm_positions, mrope_position_delta);
 }
 
-std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_qwen3(
-    torch::Tensor image_grid_thw,
-    torch::Tensor video_grid_thw) {
-  auto image_token_id = args_.image_token_id();
-  auto video_token_id = args_.video_token_id();
-  auto vision_start_token_id = args_.vision_start_token_id();
-  auto spatial_merge_size = args_.mm_spatial_merge_size();
+std::tuple<torch::Tensor, int32_t> Qwen3VLMPositionGenerator::generate(
+    Sequence& sequence,
+    const ModelArgs& model_args) const {
+  torch::Tensor image_grid_thw = get_mm_tensor(sequence, "image_grid_thw");
+  torch::Tensor video_grid_thw = get_mm_tensor(sequence, "video_grid_thw");
+  auto image_token_id = model_args.image_token_id();
+  auto video_token_id = model_args.video_token_id();
+  auto vision_start_token_id = model_args.vision_start_token_id();
+  auto spatial_merge_size = model_args.mm_spatial_merge_size();
 
   if (video_grid_thw.defined() && video_grid_thw.numel() > 0) {
     auto t_counts =
@@ -332,7 +365,7 @@ std::tuple<torch::Tensor, int32_t> MPositionHelper::get_positions_qwen3(
     video_grid_thw.index_put_({torch::indexing::Slice(), 0}, 1);
   }
 
-  auto input_tokens = seq_.tokens();
+  auto input_tokens = sequence.tokens();
   auto input_tokens_tensor =
       torch::tensor(std::vector<int32_t>(input_tokens), torch::kInt32);
   auto vision_start_indices =

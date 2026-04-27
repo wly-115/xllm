@@ -753,6 +753,7 @@ REGISTER_MODEL_ARGS(qwen3_vl, [&] {
   // text config
   // LOAD_ARG_OR(attention_dropout, "attention_dropout", 0.0);
   LOAD_ARG_OR(model_type, "model_type", "qwen3_vl");
+  args->mposition_type() = MPositionType::QWEN3_VL;
   LOAD_ARG_OR(bos_token_id, "text_config.bos_token_id", 151643);
   LOAD_ARG_OR(eos_token_id, "text_config.eos_token_id", 151645);
   LOAD_ARG_OR(

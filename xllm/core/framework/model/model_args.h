@@ -29,8 +29,15 @@ limitations under the License.
 
 namespace xllm {
 
+enum class MPositionType : int8_t {
+  QWEN2_5_VL = 0,
+  QWEN3_VL = 1,
+  GLM4V = 2,
+};
+
 struct ModelArgs {
   PROPERTY(std::string, model_type);
+  PROPERTY(MPositionType, mposition_type) = MPositionType::QWEN2_5_VL;
 
   PROPERTY(std::string, dtype);
 
@@ -477,6 +484,7 @@ inline bool has_linear_attention_layers(const ModelArgs& args) {
 
 inline std::ostream& operator<<(std::ostream& os, const ModelArgs& args) {
   os << "ModelArgs: [model_type: " << args.model_type();
+  os << ", mposition_type: " << static_cast<int32_t>(args.mposition_type());
   os << ", image_embedding_mode: " << args.image_embedding_mode();
   os << ", dtype: " << args.dtype();
   os << ", hidden_size: " << args.hidden_size();

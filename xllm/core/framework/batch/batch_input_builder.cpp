@@ -352,7 +352,8 @@ void BatchInputBuilder::extract_tokens_and_positions(Sequence* sequence,
   // Handle MRope positions
   if (use_mrope_) {
     const auto& args = *args_;
-    MPositionHelper helper(*sequence, args);
+    auto generator = create_mposition_generator(args.mposition_type());
+    MPositionHelper helper(*sequence, args, std::move(generator));
     state.mrope_positions_vec.emplace_back(helper.get_positions());
   }
 

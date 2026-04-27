@@ -221,6 +221,7 @@ REGISTER_IMAGE_PROCESSOR(glm4v_moe, Glm4VImageProcessor);
 // register the model args
 REGISTER_MODEL_ARGS(glm4v_moe, [&] {
   LOAD_ARG_OR(model_type, "model_type", "glm4v_moe");
+  args->mposition_type() = MPositionType::GLM4V;
   LOAD_ARG_OR(image_start_token_id, "image_start_token_id", 151339);
   LOAD_ARG_OR(image_end_token_id, "image_end_token_id", 151340);
   LOAD_ARG_OR(video_start_token_id, "video_start_token_id", 151341);
