@@ -166,6 +166,10 @@ struct Options {
   // enable service routing mode.
   PROPERTY(bool, enable_service_routing) = false;
 
+  PROPERTY(bool, disable_ttft_profiling) = false;
+
+  PROPERTY(bool, enable_forward_interruption) = false;
+
   PROPERTY(std::string, priority_strategy) = "fcfs";
 
   PROPERTY(bool, enable_online_preempt_offline) = true;

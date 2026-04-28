@@ -32,7 +32,6 @@ limitations under the License.
 #include "framework/request/request_output.h"
 #include "framework/request/request_params.h"
 #include "master.h"
-#include "scheduler/continuous_scheduler.h"
 #include "xllm/processors/core/multimodal_processor.h"
 
 namespace xllm {
@@ -100,8 +99,6 @@ class VLMMaster : public Master {
 
   bool build_mm_data_from_image_urls(const std::vector<std::string>& image_urls,
                                      MMData& mm_data);
-
-  std::unique_ptr<Scheduler> scheduler_;
 
   // model args
   ModelArgs model_args_;

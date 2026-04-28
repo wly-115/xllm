@@ -31,7 +31,6 @@ limitations under the License.
 #include "dit_engine.h"
 #include "framework/request/dit_request.h"
 #include "models/model_registry.h"
-#include "scheduler/scheduler_factory.h"
 #include "util/device_name_utils.h"
 #include "util/scope_guard.h"
 #include "util/timer.h"
@@ -42,12 +41,8 @@ volatile bool DiTAssistantMaster::running_ = false;
 DiTMaster::DiTMaster(const Options& options)
     : Master(options, EngineType::DIT) {
   CHECK(engine_->init());
-
-  DiTScheduler::Options scheduler_options;
-  scheduler_options.max_request_per_batch(options.max_requests_per_batch());
-
-  scheduler_ = create_dit_scheduler(engine_.get(), scheduler_options);
-  LOG(INFO) << "created dit scheduler in DiTMaster.";
+  CHECK(engine_->init_scheduler());
+  LOG(INFO) << "created dit scheduler in DiTEngine.";
 
   threadpool_ =
       std::make_unique<ThreadPool>(options.num_request_handling_threads());
@@ -66,7 +61,7 @@ DiTMaster::~DiTMaster() {
 void DiTMaster::handle_request(DiTRequestParams params,
                                std::optional<Call*> call,
                                DiTOutputCallback callback) {
-  scheduler_->incr_pending_requests(1);
+  engine_->incr_pending_requests(1);
   auto cb = [callback = std::move(callback)](const DiTRequestOutput& output) {
     output.log_request_status();
     return callback(output);
@@ -80,7 +75,7 @@ void DiTMaster::handle_request(DiTRequestParams params,
     AUTO_COUNTER(request_handling_latency_seconds_completion);
 
     // remove the pending request after scheduling
-    SCOPE_GUARD([this] { scheduler_->decr_pending_requests(); });
+    SCOPE_GUARD([this] { engine_->decr_pending_requests(); });
 
     Timer timer;
     // verify the prompt
@@ -94,7 +89,8 @@ void DiTMaster::handle_request(DiTRequestParams params,
                                                 params.x_request_time,
                                                 std::move(dit_state));
 
-    if (!scheduler_->add_request(request)) {
+    auto* dit_engine = static_cast<DiTEngine*>(engine_.get());
+    if (!dit_engine->add_request(request)) {
       CALLBACK_WITH_ERROR(StatusCode::RESOURCE_EXHAUSTED,
                           "No available resources to schedule request");
     }
@@ -104,7 +100,7 @@ void DiTMaster::handle_request(DiTRequestParams params,
 void DiTMaster::handle_batch_request(std::vector<DiTRequestParams> params_vec,
                                      BatchDiTOutputCallback callback) {
   const size_t num_requests = params_vec.size();
-  scheduler_->incr_pending_requests(num_requests);
+  engine_->incr_pending_requests(num_requests);
   for (size_t i = 0; i < num_requests; ++i) {
     handle_request(std::move(params_vec[i]),
                    std::nullopt,
@@ -126,7 +122,7 @@ void DiTMaster::run() {
   loop_thread_ = std::thread([this]() {
     const auto timeout = absl::Milliseconds(500);
     while (!stoped_.load(std::memory_order_relaxed)) {
-      scheduler_->step(timeout);
+      engine_->step_scheduler(timeout);
     }
     LOG(INFO) << "DiTMaster loop thread exiting.";
     running_.store(false, std::memory_order_relaxed);
@@ -143,7 +139,7 @@ void DiTMaster::generate() {
   }
 
   running_.store(true, std::memory_order_relaxed);
-  scheduler_->generate();
+  engine_->generate();
   running_.store(false, std::memory_order_relaxed);
 }
 

@@ -34,6 +34,7 @@ limitations under the License.
 #include "common/metrics.h"
 #include "common/types.h"
 #include "core/common/xllm_build_info.h"
+#include "dit_engine.h"
 #include "dit_master.h"
 #include "framework/model/model_args.h"
 #include "framework/request/request.h"
@@ -215,9 +216,18 @@ Master::Master(const Options& options, EngineType type)
         .node_rank(options.node_rank())
         .dp_size(options.dp_size())
         .ep_size(options.ep_size())
+        .max_tokens_per_batch(options_.max_tokens_per_batch())
         .max_seqs_per_batch(options_.max_seqs_per_batch())
         .max_tokens_per_chunk_for_prefill(
-            options_.max_tokens_per_chunk_for_prefill());
+            options_.max_tokens_per_chunk_for_prefill())
+        .instance_name(options_.instance_name())
+        .instance_role(options_.instance_role())
+        .kv_cache_transfer_mode(options_.kv_cache_transfer_mode())
+        .enable_disagg_pd(options_.enable_disagg_pd())
+        .enable_service_routing(options_.enable_service_routing())
+        .disable_ttft_profiling(options_.disable_ttft_profiling())
+        .enable_forward_interruption(options_.enable_forward_interruption())
+        .server_idx(options_.server_idx());
 
     auto engine = std::make_unique<VLMEngine>(eng_options);
     engine_ = std::move(engine);
@@ -408,7 +418,8 @@ Master::Master(const Options& options, EngineType type)
         .ep_size(options_.ep_size())
         .tp_size(options_.tp_size())
         .sp_size(options_.sp_size())
-        .cfg_size(options_.cfg_size());
+        .cfg_size(options_.cfg_size())
+        .max_requests_per_batch(options_.max_requests_per_batch());
 
     auto dit_engine = std::make_unique<DiTEngine>(eng_options);
     engine_ = std::move(dit_engine);

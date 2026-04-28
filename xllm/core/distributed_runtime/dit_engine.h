@@ -16,6 +16,7 @@ limitations under the License.
 
 #pragma once
 
+#include <absl/time/time.h>
 #include <gflags/gflags.h>
 
 #include <memory>
@@ -29,19 +30,33 @@ limitations under the License.
 #include "runtime/dit_worker_impl.h"
 
 namespace xllm {
+class DiTRequest;
+class DiTScheduler;
 
 class DiTEngine : public Engine {
  public:
   DiTEngine(const runtime::Options& options,
             std::shared_ptr<DistManager> dist_manager = nullptr);
 
-  ~DiTEngine() = default;
+  ~DiTEngine();
 
   DiTForwardOutput step(std::vector<DiTBatch>& batch);
 
   const runtime::Options& options() const { return options_; }
 
   bool init();
+
+  bool init_scheduler() override;
+
+  bool add_request(std::shared_ptr<DiTRequest>& request);
+
+  void incr_pending_requests(size_t count) override;
+
+  void decr_pending_requests() override;
+
+  void step_scheduler(const absl::Duration& timeout) override;
+
+  void generate() override;
 
   // return the active activation memory
   std::vector<int64_t> get_active_activation_memory() const;
@@ -84,6 +99,8 @@ class DiTEngine : public Engine {
   int64_t worker_clients_num_;
   // a list of process groups, with each process group handling a single device
   std::vector<std::unique_ptr<ProcessGroup>> process_groups_;
+
+  std::unique_ptr<DiTScheduler> scheduler_;
 };
 
 }  // namespace xllm

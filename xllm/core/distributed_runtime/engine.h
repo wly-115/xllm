@@ -15,8 +15,10 @@ limitations under the License.
 
 #pragma once
 
+#include <absl/time/time.h>
 #include <folly/futures/Future.h>
 
+#include <memory>
 #include <unordered_map>
 
 #include "framework/batch/batch.h"
@@ -27,6 +29,8 @@ limitations under the License.
 #include "runtime/options.h"
 
 namespace xllm {
+class Request;
+
 class Engine {
  public:
   virtual ~Engine() = default;
@@ -34,6 +38,25 @@ class Engine {
   virtual bool init() { return true; };
 
   virtual bool init(MasterStatus master_status) { return true; };
+
+  virtual bool init_scheduler() { return true; }
+
+  virtual bool add_request(std::shared_ptr<Request>& request) {
+    NOT_IMPLEMENTED();
+    return false;
+  }
+
+  virtual void incr_pending_requests(size_t count) { NOT_IMPLEMENTED(); }
+
+  virtual void decr_pending_requests() { NOT_IMPLEMENTED(); }
+
+  virtual void step_scheduler(const absl::Duration& timeout) {
+    NOT_IMPLEMENTED();
+  }
+
+  virtual void generate() { NOT_IMPLEMENTED(); }
+
+  virtual const InstanceInfo* instance_info() const { return nullptr; }
 
   // execute model with batch input
   virtual ForwardOutput step(std::vector<Batch>& batch) = 0;
