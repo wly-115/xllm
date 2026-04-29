@@ -104,7 +104,6 @@ Status parse_node(const nlohmann::json& node_json, NodeConfig& node) {
       global_ranks.emplace_back(static_cast<int32_t>(rank));
     }
     std::sort(global_ranks.begin(), global_ranks.end());
-    node.ranks.reserve(global_ranks.size());
     for (std::size_t index = 0; index < global_ranks.size(); ++index) {
       const int32_t global_rank = global_ranks[index];
       if (index > 0 && global_rank == global_ranks[index - 1]) {
@@ -205,7 +204,11 @@ Status validate_graph_config(const GraphConfig& config) {
     if (!node_names.insert(node.name).second) {
       return invalid_argument("Duplicate node name: " + node.name);
     }
+    if (node.ranks.empty()) {
+      return invalid_argument("node ranks cannot be empty: " + node.name);
+    }
     std::unordered_set<int32_t> local_ranks;
+    int32_t expected_local_rank = 0;
     for (const auto& rank : node.ranks) {
       const int32_t global_rank = rank.first;
       const int32_t local_rank = rank.second;
@@ -225,6 +228,11 @@ Status validate_graph_config(const GraphConfig& config) {
         return invalid_argument("Rank belongs to multiple nodes: " +
                                 std::to_string(global_rank));
       }
+      if (local_rank != expected_local_rank) {
+        return invalid_argument("Local rank mapping is invalid in node: " +
+                                node.name);
+      }
+      ++expected_local_rank;
     }
     if (node.final_output) {
       has_final_output = true;

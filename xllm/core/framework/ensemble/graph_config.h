@@ -16,6 +16,7 @@ limitations under the License.
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -35,7 +36,7 @@ struct NodeConfig {
   std::string name;
   std::string node_type;
   std::vector<std::string> deps;
-  std::unordered_map<int32_t, int32_t> ranks;
+  std::map<int32_t, int32_t> ranks;
   std::unordered_map<std::string, std::string> engine_config;
   std::string request_adapter;
   std::unordered_map<std::string, std::string> request_adapter_config;

@@ -15,6 +15,18 @@ cc_library(
 
 cc_library(
   NAME
+    graph
+  HDRS
+    graph.h
+  SRCS
+    graph.cpp
+  DEPS
+    graph_config
+    glog::glog
+)
+
+cc_library(
+  NAME
     engine_config
   HDRS
     engine_config.h
