@@ -13,6 +13,20 @@ cc_library(
     nlohmann_json::nlohmann_json
 )
 
+cc_library(
+  NAME
+    engine_config
+  HDRS
+    engine_config.h
+  SRCS
+    engine_config.cpp
+  DEPS
+    graph_config
+    :common
+    :util
+    gflags::gflags
+)
+
 cc_test(
   NAME
     graph_config_test
