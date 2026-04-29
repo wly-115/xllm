@@ -333,6 +333,21 @@ service Collective {
   rpc Sync(AddressInfo) returns (CommUniqueIdList);
 }
 
+message EnsembleNodeReadyRequest {
+  string node_name = 1;
+  string target = 2;
+}
+
+message EnsembleNodeReadyResponse {
+  bool ok = 1;
+}
+
+// master creates EnsembleNodeReady service to wait remote graph nodes.
+service EnsembleNodeReady {
+  rpc RegisterReady(EnsembleNodeReadyRequest)
+      returns (EnsembleNodeReadyResponse);
+}
+
 // Worker receive action from master engine.
 service DistributeWorker {
   rpc Hello (Status) returns (Status);
