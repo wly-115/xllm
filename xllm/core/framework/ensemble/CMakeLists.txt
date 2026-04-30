@@ -9,7 +9,7 @@ cc_library(
   SRCS
     graph_config.cpp
   DEPS
-    :common
+    glog::glog
     nlohmann_json::nlohmann_json
 )
 
@@ -37,6 +37,7 @@ cc_library(
     :common
     :util
     gflags::gflags
+    glog::glog
 )
 
 cc_test(

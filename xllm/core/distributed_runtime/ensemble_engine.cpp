@@ -13,19 +13,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#pragma once
+#include "core/distributed_runtime/ensemble_engine.h"
 
-#include <cstdint>
+#include <glog/logging.h>
 
-#include "core/framework/ensemble/graph_config.h"
-#include "core/runtime/options.h"
+#include <memory>
+#include <utility>
 
 namespace xllm {
-namespace ensemble {
 
-bool initialize_engine_options_from_config(const GraphConfig& config,
-                                           int32_t graph_global_rank,
-                                           runtime::Options& runtime_options);
+EnsembleEngine::EnsembleEngine(std::shared_ptr<const ensemble::Graph> graph)
+    : graph_(std::move(graph)) {
+  CHECK(graph_ != nullptr) << "graph cannot be null.";
+}
 
-}  // namespace ensemble
 }  // namespace xllm

@@ -16,16 +16,37 @@ limitations under the License.
 #pragma once
 
 #include <cstdint>
+#include <memory>
+#include <string>
 
 #include "core/framework/ensemble/graph_config.h"
-#include "core/runtime/options.h"
 
 namespace xllm {
+
 namespace ensemble {
-
-bool initialize_engine_options_from_config(const GraphConfig& config,
-                                           int32_t graph_global_rank,
-                                           runtime::Options& runtime_options);
-
+class Graph;
 }  // namespace ensemble
+
+class EnsembleEngine;
+class EnsembleNodeReadyService;
+
+class OmniMaster final {
+ public:
+  OmniMaster() = default;
+
+  bool init(const std::string& graph_config_path, int32_t node_rank);
+
+ private:
+  bool validate_init_args(const std::string& graph_config_path,
+                          int32_t node_rank) const;
+  bool load_graph_config(const std::string& graph_config_path);
+  bool wait_engine_services_ready();
+  std::shared_ptr<const ensemble::Graph> build_graph() const;
+  bool create_ensemble_engine(std::shared_ptr<const ensemble::Graph> graph);
+
+  ensemble::GraphConfig graph_config_;
+  std::shared_ptr<EnsembleNodeReadyService> ready_service_;
+  std::shared_ptr<EnsembleEngine> ensemble_engine_;
+};
+
 }  // namespace xllm

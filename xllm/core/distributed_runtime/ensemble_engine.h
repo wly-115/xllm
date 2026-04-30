@@ -15,17 +15,20 @@ limitations under the License.
 
 #pragma once
 
-#include <cstdint>
-
-#include "core/framework/ensemble/graph_config.h"
-#include "core/runtime/options.h"
+#include <memory>
 
 namespace xllm {
+
 namespace ensemble {
-
-bool initialize_engine_options_from_config(const GraphConfig& config,
-                                           int32_t graph_global_rank,
-                                           runtime::Options& runtime_options);
-
+class Graph;
 }  // namespace ensemble
+
+class EnsembleEngine final {
+ public:
+  explicit EnsembleEngine(std::shared_ptr<const ensemble::Graph> graph);
+
+ private:
+  std::shared_ptr<const ensemble::Graph> graph_;
+};
+
 }  // namespace xllm

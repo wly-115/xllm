@@ -30,6 +30,7 @@ using OptionCategory = std::pair<std::string, std::vector<std::string>>;
 
 const OptionCategory kCommonOptions = {"COMMON OPTIONS",
                                        {"master_node_addr",
+                                        "omni_master_addr",
                                         "host",
                                         "port",
                                         "model",

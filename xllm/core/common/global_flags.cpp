@@ -299,6 +299,11 @@ DEFINE_string(master_node_addr,
               "The master address for multi-node distributed serving(e.g. "
               "10.18.1.1:9999).");
 
+DEFINE_string(omni_master_addr,
+              "127.0.0.1:19890",
+              "The OmniMaster address for omni graph ready registration(e.g. "
+              "10.18.1.1:9999).");
+
 DEFINE_string(
     xtensor_master_node_addr,
     "127.0.0.1:19889",

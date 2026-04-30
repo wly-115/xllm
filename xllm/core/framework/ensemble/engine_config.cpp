@@ -16,6 +16,7 @@ limitations under the License.
 #include "core/framework/ensemble/engine_config.h"
 
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 #include <string>
 #include <unordered_map>
@@ -32,8 +33,9 @@ namespace xllm {
 namespace ensemble {
 namespace {
 
-Status invalid_argument(const std::string& message) {
-  return Status(StatusCode::INVALID_ARGUMENT, message);
+bool log_invalid_argument(const std::string& message) {
+  LOG(ERROR) << message;
+  return false;
 }
 
 void restore_flags(
@@ -43,14 +45,14 @@ void restore_flags(
   }
 }
 
-Status apply_engine_config(
+bool apply_engine_config(
     const std::unordered_map<std::string, std::string>& engine_config) {
   std::vector<std::pair<std::string, std::string>> previous_values;
   previous_values.reserve(engine_config.size());
   for (const auto& [name, value] : engine_config) {
     google::CommandLineFlagInfo flag_info;
     if (!google::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
-      return invalid_argument("Unknown engine_config field: " + name);
+      return log_invalid_argument("Unknown engine_config field: " + name);
     }
     previous_values.emplace_back(name, flag_info.current_value);
   }
@@ -60,24 +62,25 @@ Status apply_engine_config(
         google::SetCommandLineOption(name.c_str(), value.c_str());
     if (applied_value.empty()) {
       restore_flags(previous_values);
-      return invalid_argument("Failed to apply engine_config field: " + name +
-                              "=" + value);
+      return log_invalid_argument(
+          "Failed to apply engine_config field: " + name + "=" + value);
     }
   }
-  return Status();
+  return true;
 }
 
-Status find_node_config(const GraphConfig& config,
-                        int32_t global_rank,
-                        NodeConfig& node) {
+bool find_node_config(const GraphConfig& config,
+                      int32_t global_rank,
+                      NodeConfig& node) {
   for (const NodeConfig& candidate : config.nodes) {
     if (candidate.ranks.find(global_rank) != candidate.ranks.end()) {
       node = candidate;
-      return Status();
+      return true;
     }
   }
-  return invalid_argument("graph global rank does not belong to any node: " +
-                          std::to_string(global_rank));
+  return log_invalid_argument(
+      "graph global rank does not belong to any node: " +
+      std::to_string(global_rank));
 }
 
 Options build_options(int32_t local_rank, int32_t world_size) {
@@ -277,31 +280,27 @@ runtime::Options build_runtime_options(const Options& options,
 
 }  // namespace
 
-Status initialize_engine_options_from_config(
-    const GraphConfig& config,
-    int32_t global_rank,
-    runtime::Options& runtime_options) {
-  Status status = validate_graph_config(config);
-  if (!status.ok()) {
-    return status;
+bool initialize_engine_options_from_config(const GraphConfig& config,
+                                           int32_t global_rank,
+                                           runtime::Options& runtime_options) {
+  if (!validate_graph_config(config)) {
+    return false;
   }
 
   NodeConfig node;
-  status = find_node_config(config, global_rank, node);
-  if (!status.ok()) {
-    return status;
+  if (!find_node_config(config, global_rank, node)) {
+    return false;
   }
 
   const int32_t local_rank = node.ranks.at(global_rank);
   const int32_t world_size = static_cast<int32_t>(node.ranks.size());
-  status = apply_engine_config(node.engine_config);
-  if (!status.ok()) {
-    return status;
+  if (!apply_engine_config(node.engine_config)) {
+    return false;
   }
 
   Options options = build_options(local_rank, world_size);
   runtime_options = build_runtime_options(options, local_rank, world_size);
-  return Status();
+  return true;
 }
 
 }  // namespace ensemble

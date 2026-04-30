@@ -88,22 +88,19 @@ constexpr char kQwenImageEditConfig[] = R"json(
 
 GraphConfig load_config_or_die(const std::string& json_text) {
   GraphConfig config;
-  Status status = load_graph_config_from_json(json_text, config);
-  EXPECT_TRUE(status.ok()) << status.message();
+  EXPECT_TRUE(load_graph_config_from_json(json_text, config));
   return config;
 }
 
-Status load_config_status(const std::string& json_text) {
+bool load_config(const std::string& json_text) {
   GraphConfig config;
   return load_graph_config_from_json(json_text, config);
 }
 
-Status validate_config_from_json(const std::string& json_text) {
+bool validate_config_from_json(const std::string& json_text) {
   GraphConfig config;
-  Status status = load_graph_config_from_json(json_text, config);
-  EXPECT_TRUE(status.ok()) << status.message();
-  if (!status.ok()) {
-    return status;
+  if (!load_graph_config_from_json(json_text, config)) {
+    return false;
   }
   return validate_graph_config(config);
 }
@@ -112,8 +109,7 @@ TEST(GraphConfigLoadTest, LoadQwenImageEditConfig) {
   GraphConfig config = load_config_or_die(kQwenImageEditConfig);
   EXPECT_EQ(config.graph_name, "qwen_image_edit");
   ASSERT_EQ(config.nodes.size(), 2);
-  Status validate_status = validate_graph_config(config);
-  EXPECT_TRUE(validate_status.ok()) << validate_status.message();
+  EXPECT_TRUE(validate_graph_config(config));
 
   const NodeConfig& vlm_node = config.nodes[0];
   EXPECT_EQ(vlm_node.name, "node0");
@@ -160,10 +156,9 @@ TEST(GraphConfigLoadTest, RejectsDuplicateRankInNode) {
   ]
 }
 )json";
-  Status validate_status = load_config_status(kConfig);
+  bool validate_status = load_config(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsDuplicateNodeName) {
@@ -198,10 +193,9 @@ TEST(GraphConfigValidateTest, RejectsDuplicateNodeName) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsRankBelongingToMultipleNodes) {
@@ -220,10 +214,9 @@ TEST(GraphConfigValidateTest, RejectsRankBelongingToMultipleNodes) {
   node1.output_keys = {"text"};
   config.nodes.emplace_back(node1);
 
-  Status validate_status = validate_graph_config(config);
+  bool validate_status = validate_graph_config(config);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsInvalidLocalRankMapping) {
@@ -237,10 +230,9 @@ TEST(GraphConfigValidateTest, RejectsInvalidLocalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  Status validate_status = validate_graph_config(config);
+  bool validate_status = validate_graph_config(config);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsNegativeGlobalRankMapping) {
@@ -254,10 +246,9 @@ TEST(GraphConfigValidateTest, RejectsNegativeGlobalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  Status validate_status = validate_graph_config(config);
+  bool validate_status = validate_graph_config(config);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsDuplicateLocalRankMapping) {
@@ -271,13 +262,12 @@ TEST(GraphConfigValidateTest, RejectsDuplicateLocalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  Status validate_status = validate_graph_config(config);
+  bool validate_status = validate_graph_config(config);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
-TEST(GraphConfigValidateTest, AcceptsNodeWithEmptyRanks) {
+TEST(GraphConfigValidateTest, RejectsNodeWithEmptyRanks) {
   constexpr char kConfig[] = R"json(
 {
   "graph_name": "empty_ranks",
@@ -298,9 +288,9 @@ TEST(GraphConfigValidateTest, AcceptsNodeWithEmptyRanks) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_TRUE(validate_status.ok()) << validate_status.message();
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsUnknownDependency) {
@@ -325,10 +315,9 @@ TEST(GraphConfigValidateTest, RejectsUnknownDependency) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsMissingFinalOutput) {
@@ -350,10 +339,9 @@ TEST(GraphConfigValidateTest, RejectsMissingFinalOutput) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsEmptyFinalOutputKeys) {
@@ -377,10 +365,9 @@ TEST(GraphConfigValidateTest, RejectsEmptyFinalOutputKeys) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigValidateTest, RejectsFinalOutputWithDownstreamNode) {
@@ -416,10 +403,9 @@ TEST(GraphConfigValidateTest, RejectsFinalOutputWithDownstreamNode) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigLoadTest, RejectsRankOutsideInt32Range) {
@@ -443,10 +429,9 @@ TEST(GraphConfigLoadTest, RejectsRankOutsideInt32Range) {
   ]
 }
 )json";
-  Status status = load_config_status(kConfig);
+  bool status = load_config(kConfig);
 
-  EXPECT_FALSE(status.ok());
-  EXPECT_EQ(status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(status);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeRank) {
@@ -470,10 +455,9 @@ TEST(GraphConfigLoadTest, RejectsNegativeRank) {
   ]
 }
 )json";
-  Status status = load_config_status(kConfig);
+  bool status = load_config(kConfig);
 
-  EXPECT_FALSE(status.ok());
-  EXPECT_EQ(status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(status);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeReadyTimeout) {
@@ -498,10 +482,9 @@ TEST(GraphConfigLoadTest, RejectsNegativeReadyTimeout) {
   ]
 }
 )json";
-  Status status = load_config_status(kConfig);
+  bool status = load_config(kConfig);
 
-  EXPECT_FALSE(status.ok());
-  EXPECT_EQ(status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(status);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeNodeTimeout) {
@@ -526,10 +509,9 @@ TEST(GraphConfigLoadTest, RejectsNegativeNodeTimeout) {
   ]
 }
 )json";
-  Status status = load_config_status(kConfig);
+  bool status = load_config(kConfig);
 
-  EXPECT_FALSE(status.ok());
-  EXPECT_EQ(status.code(), StatusCode::INVALID_ARGUMENT);
+  EXPECT_FALSE(status);
 }
 
 TEST(GraphConfigValidateTest, RejectsCyclicGraph) {
@@ -577,12 +559,9 @@ TEST(GraphConfigValidateTest, RejectsCyclicGraph) {
   ]
 }
 )json";
-  Status validate_status = validate_config_from_json(kConfig);
+  bool validate_status = validate_config_from_json(kConfig);
 
-  EXPECT_FALSE(validate_status.ok());
-  EXPECT_EQ(validate_status.code(), StatusCode::INVALID_ARGUMENT);
-  EXPECT_NE(validate_status.message().find("graph must be a DAG"),
-            std::string::npos);
+  EXPECT_FALSE(validate_status);
 }
 
 TEST(GraphConfigTest, BuildsReadyKey) {

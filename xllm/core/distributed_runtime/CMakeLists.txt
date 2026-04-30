@@ -108,6 +108,17 @@ cc_library(
     proto::xllm_proto
 )
 
+cc_library(
+  NAME
+    ensemble_engine
+  HDRS
+    ensemble_engine.h
+  SRCS
+    ensemble_engine.cpp
+  DEPS
+    glog::glog
+)
+
 target_link_libraries(worker_service PRIVATE brpc leveldb::leveldb protobuf::libprotobuf)
 
 cc_library(

@@ -116,6 +116,8 @@ DECLARE_bool(enable_prefill_sp);
 
 DECLARE_string(master_node_addr);
 
+DECLARE_string(omni_master_addr);
+
 DECLARE_string(xtensor_master_node_addr);
 
 DECLARE_bool(enable_disagg_pd);
