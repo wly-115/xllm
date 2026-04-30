@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "jd.com/jd-infer/xllm;xllm";
+package xllm.proto;
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+message EngineServiceRequest {
+  string request_id = 1;
+  string node_name = 2;
+  bytes payload = 3;
+}
+
+message EngineServiceResponse {
+  bool ok = 1;
+  string error_message = 2;
+  bytes payload = 3;
+}
+
+service EngineService {
+  rpc Submit(EngineServiceRequest) returns (EngineServiceResponse);
+}

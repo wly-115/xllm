@@ -23,12 +23,21 @@ limitations under the License.
 #include <unordered_map>
 #include <utility>
 
+#include "core/common/global_flags.h"
 #include "core/distributed_runtime/ensemble_engine.h"
 #include "core/distributed_runtime/ensemble_node_ready_service.h"
 #include "core/framework/ensemble/graph.h"
 #include "core/framework/ensemble/graph_config.h"
+#include "server/xllm_server_registry.h"
 
 namespace xllm {
+
+OmniMaster::~OmniMaster() {
+  if (ready_server_name_.empty()) {
+    return;
+  }
+  ServerRegistry::get_instance().unregister_server(ready_server_name_);
+}
 
 bool OmniMaster::init(const std::string& graph_config_path, int32_t node_rank) {
   if (!validate_init_args(graph_config_path, node_rank)) {
@@ -71,14 +80,48 @@ bool OmniMaster::load_graph_config(const std::string& graph_config_path) {
   return true;
 }
 
+bool OmniMaster::start_ready_service() {
+  if (FLAGS_omni_master_addr.empty()) {
+    LOG(ERROR) << "omni_master_addr cannot be empty.";
+    return false;
+  }
+
+  ready_server_name_ = "EnsembleNodeReady";
+  auto& registry = ServerRegistry::get_instance();
+  if (registry.try_get_server(ready_server_name_) != nullptr) {
+    LOG(ERROR) << "EnsembleNodeReady server has already been registered.";
+    return false;
+  }
+
+  XllmServer* ready_server = registry.register_server(ready_server_name_);
+  if (!ready_server->start(
+          ready_service_.get(), FLAGS_omni_master_addr, ready_server_name_)) {
+    LOG(ERROR) << "Failed to start EnsembleNodeReady server on address "
+               << FLAGS_omni_master_addr;
+    registry.unregister_server(ready_server_name_);
+    ready_server_name_.clear();
+    return false;
+  }
+
+  LOG(INFO) << "Started EnsembleNodeReady server on address "
+            << FLAGS_omni_master_addr;
+  return true;
+}
+
 bool OmniMaster::wait_engine_services_ready() {
   const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
   ready_service_ = std::make_shared<EnsembleNodeReadyService>(total_num);
+  if (!start_ready_service()) {
+    return false;
+  }
+
   std::unordered_map<std::string, std::string> ready_targets =
       ready_service_->wait(graph_config_.ready_timeout_ms);
   if (static_cast<int32_t>(ready_targets.size()) != total_num) {
     LOG(ERROR) << "Not all engine services are ready. expected=" << total_num
                << ", actual=" << ready_targets.size();
+    ServerRegistry::get_instance().unregister_server(ready_server_name_);
+    ready_server_name_.clear();
     return false;
   }
 
@@ -86,10 +129,15 @@ bool OmniMaster::wait_engine_services_ready() {
     auto ready_it = ready_targets.find(node.name);
     if (ready_it == ready_targets.end()) {
       LOG(ERROR) << "Missing ready target for node: " << node.name;
+      ServerRegistry::get_instance().unregister_server(ready_server_name_);
+      ready_server_name_.clear();
       return false;
     }
     node.endpoint.target = ready_it->second;
   }
+
+  ServerRegistry::get_instance().unregister_server(ready_server_name_);
+  ready_server_name_.clear();
   return true;
 }
 

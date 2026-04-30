@@ -129,8 +129,11 @@ cc_library(
   DEPS
     :common
     :runtime
-    :graph_config
+    glog::glog
+    proto::xllm_proto
 )
+
+target_link_libraries(engine_service PRIVATE brpc protobuf::libprotobuf)
 
 cc_library(
   NAME
@@ -147,7 +150,10 @@ cc_library(
     :engine_config
     :graph_config
     glog::glog
+    proto::xllm_proto
 )
+
+target_link_libraries(engine_server PRIVATE brpc protobuf::libprotobuf)
 
 target_link_libraries(worker_service PRIVATE brpc leveldb::leveldb protobuf::libprotobuf)
 

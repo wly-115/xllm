@@ -14,6 +14,7 @@ cc_library(
   DEPS
     ensemble_engine
     ensemble_node_ready_service
+    :xllm_server
     :graph
     glog::glog
 )

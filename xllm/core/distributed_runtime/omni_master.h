@@ -33,6 +33,7 @@ class EnsembleNodeReadyService;
 class OmniMaster final {
  public:
   OmniMaster() = default;
+  ~OmniMaster();
 
   bool init(const std::string& graph_config_path, int32_t node_rank);
 
@@ -40,6 +41,7 @@ class OmniMaster final {
   bool validate_init_args(const std::string& graph_config_path,
                           int32_t node_rank) const;
   bool load_graph_config(const std::string& graph_config_path);
+  bool start_ready_service();
   bool wait_engine_services_ready();
   std::shared_ptr<const ensemble::Graph> build_graph() const;
   bool create_ensemble_engine(std::shared_ptr<const ensemble::Graph> graph);
@@ -47,6 +49,7 @@ class OmniMaster final {
   ensemble::GraphConfig graph_config_;
   std::shared_ptr<EnsembleNodeReadyService> ready_service_;
   std::shared_ptr<EnsembleEngine> ensemble_engine_;
+  std::string ready_server_name_;
 };
 
 }  // namespace xllm

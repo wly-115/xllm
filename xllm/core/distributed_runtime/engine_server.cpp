@@ -15,6 +15,8 @@ limitations under the License.
 
 #include "core/distributed_runtime/engine_server.h"
 
+#include <brpc/channel.h>
+#include <brpc/controller.h>
 #include <glog/logging.h>
 
 #include <utility>
@@ -23,9 +25,14 @@ limitations under the License.
 #include "core/distributed_runtime/dit_engine.h"
 #include "core/distributed_runtime/vlm_engine.h"
 #include "core/framework/ensemble/engine_config.h"
+#include "server/xllm_server_registry.h"
+#include "worker.pb.h"
 
 namespace xllm {
 namespace {
+
+constexpr int32_t kReadyRegisterTimeoutMs = 10000;
+constexpr int32_t kReadyRegisterMaxRetry = 3;
 
 bool find_node_config(const ensemble::GraphConfig& graph_config,
                       int32_t node_rank,
@@ -41,6 +48,13 @@ bool find_node_config(const ensemble::GraphConfig& graph_config,
 }
 
 }  // namespace
+
+EngineServer::~EngineServer() {
+  if (server_name_.empty()) {
+    return;
+  }
+  ServerRegistry::get_instance().unregister_server(server_name_);
+}
 
 bool EngineServer::init(const std::string& graph_config_path,
                         int32_t node_rank) {
@@ -131,11 +145,18 @@ bool EngineServer::init_engine_service(int32_t node_rank) {
     return true;
   }
 
-  service_ =
-      std::make_unique<EngineService>(node_config_, options_, engine_.get());
+  service_ = std::make_unique<EngineService>(engine_.get());
   LOG(INFO) << "Initialized EngineService skeleton for graph node "
             << node_config_.name << ", node_rank=" << node_rank;
-  return start_service_endpoint() && register_ready();
+  if (!start_service_endpoint()) {
+    return false;
+  }
+  if (!register_service()) {
+    ServerRegistry::get_instance().unregister_server(server_name_);
+    server_name_.clear();
+    return false;
+  }
+  return true;
 }
 
 bool EngineServer::start_service_endpoint() {
@@ -145,22 +166,73 @@ bool EngineServer::start_service_endpoint() {
     return false;
   }
 
-  LOG(INFO) << "Prepared EngineService endpoint for graph node "
-            << node_config_.name
-            << ", transport=" << node_config_.endpoint.transport
-            << ", target=" << node_config_.endpoint.target;
-  return true;
-}
-
-bool EngineServer::register_ready() {
-  if (FLAGS_omni_master_addr.empty()) {
-    LOG(ERROR) << "omni_master_addr cannot be empty for EngineService ready "
-                  "registration.";
+  const std::string server_name = "EngineService:" + node_config_.name;
+  auto& registry = ServerRegistry::get_instance();
+  if (registry.try_get_server(server_name) != nullptr) {
+    LOG(ERROR) << "EngineService endpoint has already been registered: "
+               << server_name;
     return false;
   }
 
-  LOG(INFO) << "Prepared EngineService ready registration for graph node "
-            << node_config_.name << ", target=" << node_config_.endpoint.target
+  XllmServer* server = registry.register_server(server_name);
+  if (!server->start(
+          service_.get(), node_config_.endpoint.target, server_name)) {
+    LOG(ERROR) << "Failed to start EngineService endpoint for graph node "
+               << node_config_.name
+               << ", target=" << node_config_.endpoint.target;
+    registry.unregister_server(server_name);
+    return false;
+  }
+
+  server_name_ = server_name;
+  LOG(INFO) << "Started EngineService endpoint for graph node "
+            << node_config_.name << ", target=" << node_config_.endpoint.target;
+  return true;
+}
+
+bool EngineServer::register_service() {
+  if (FLAGS_omni_master_addr.empty()) {
+    LOG(ERROR) << "omni_master_addr cannot be empty.";
+    return false;
+  }
+
+  brpc::ChannelOptions options;
+  options.connection_type = "single";
+  options.timeout_ms = kReadyRegisterTimeoutMs;
+  options.max_retry = kReadyRegisterMaxRetry;
+
+  brpc::Channel channel;
+  if (channel.Init(FLAGS_omni_master_addr.c_str(),
+                   /*load_balancer=*/"",
+                   &options) != 0) {
+    LOG(ERROR) << "Failed to initialize ready registration channel to "
+               << FLAGS_omni_master_addr;
+    return false;
+  }
+
+  proto::EnsembleNodeReadyRequest request;
+  request.set_node_name(node_config_.name);
+  request.set_target(node_config_.endpoint.target);
+
+  proto::EnsembleNodeReadyResponse response;
+  brpc::Controller controller;
+  proto::EnsembleNodeReady_Stub stub(&channel);
+  stub.RegisterReady(&controller, &request, &response, nullptr);
+  if (controller.Failed()) {
+    LOG(ERROR) << "Failed to register ready for graph node "
+               << node_config_.name << " to " << FLAGS_omni_master_addr << ": "
+               << controller.ErrorText();
+    return false;
+  }
+  if (!response.ok()) {
+    LOG(ERROR) << "Ready registration rejected for graph node "
+               << node_config_.name
+               << ", target=" << node_config_.endpoint.target;
+    return false;
+  }
+
+  LOG(INFO) << "Registered ready for graph node " << node_config_.name
+            << ", target=" << node_config_.endpoint.target
             << ", omni_master_addr=" << FLAGS_omni_master_addr;
   return true;
 }

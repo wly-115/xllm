@@ -15,31 +15,25 @@ limitations under the License.
 
 #pragma once
 
-#include <string>
-
 #include "common/macros.h"
 #include "core/distributed_runtime/engine.h"
-#include "core/framework/ensemble/graph_config.h"
-#include "core/runtime/options.h"
+#include "engine_service.pb.h"
 
 namespace xllm {
 
-class EngineService final {
+class EngineService final : public proto::EngineService {
  public:
-  EngineService(ensemble::NodeConfig node_config,
-                runtime::Options options,
-                Engine* engine);
+  explicit EngineService(Engine* engine);
+  ~EngineService() override = default;
 
-  const std::string& node_name() const;
-  const ensemble::EndpointConfig& endpoint() const;
-  const runtime::Options& options() const;
-  Engine* engine() const;
+  void Submit(::google::protobuf::RpcController* controller,
+              const proto::EngineServiceRequest* request,
+              proto::EngineServiceResponse* response,
+              ::google::protobuf::Closure* done) override;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(EngineService);
 
-  ensemble::NodeConfig node_config_;
-  runtime::Options options_;
   Engine* engine_ = nullptr;
 };
 

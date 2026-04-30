@@ -29,6 +29,7 @@ namespace xllm {
 class EngineServer final {
  public:
   EngineServer() = default;
+  ~EngineServer();
 
   bool init(const std::string& graph_config_path, int32_t node_rank);
   bool init(const ensemble::GraphConfig& graph_config, int32_t node_rank);
@@ -44,12 +45,13 @@ class EngineServer final {
   bool create_engine();
   bool init_engine_service(int32_t node_rank);
   bool start_service_endpoint();
-  bool register_ready();
+  bool register_service();
 
   ensemble::NodeConfig node_config_;
   runtime::Options options_;
   std::unique_ptr<Engine> engine_;
   std::unique_ptr<EngineService> service_;
+  std::string server_name_;
 };
 
 }  // namespace xllm

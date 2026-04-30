@@ -15,31 +15,25 @@ limitations under the License.
 
 #include "core/distributed_runtime/engine_service.h"
 
+#include <brpc/closure_guard.h>
 #include <glog/logging.h>
-
-#include <utility>
 
 namespace xllm {
 
-EngineService::EngineService(ensemble::NodeConfig node_config,
-                             runtime::Options options,
-                             Engine* engine)
-    : node_config_(std::move(node_config)),
-      options_(std::move(options)),
-      engine_(engine) {
+EngineService::EngineService(Engine* engine) : engine_(engine) {
   CHECK(engine_ != nullptr) << "engine cannot be null.";
 }
 
-const std::string& EngineService::node_name() const {
-  return node_config_.name;
+void EngineService::Submit(::google::protobuf::RpcController* controller,
+                           const proto::EngineServiceRequest* request,
+                           proto::EngineServiceResponse* response,
+                           ::google::protobuf::Closure* done) {
+  brpc::ClosureGuard done_guard(done);
+
+  (void)controller;
+  (void)request;
+  response->set_ok(false);
+  response->set_error_message("EngineService Submit is not implemented.");
 }
-
-const ensemble::EndpointConfig& EngineService::endpoint() const {
-  return node_config_.endpoint;
-}
-
-const runtime::Options& EngineService::options() const { return options_; }
-
-Engine* EngineService::engine() const { return engine_; }
 
 }  // namespace xllm
