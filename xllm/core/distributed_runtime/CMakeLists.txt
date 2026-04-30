@@ -119,6 +119,36 @@ cc_library(
     glog::glog
 )
 
+cc_library(
+  NAME
+    engine_service
+  HDRS
+    engine_service.h
+  SRCS
+    engine_service.cpp
+  DEPS
+    :common
+    :runtime
+    :graph_config
+)
+
+cc_library(
+  NAME
+    engine_server
+  HDRS
+    engine_server.h
+  SRCS
+    engine_server.cpp
+  DEPS
+    :common
+    :distributed_runtime
+    :engine_service
+    :runtime
+    :engine_config
+    :graph_config
+    glog::glog
+)
+
 target_link_libraries(worker_service PRIVATE brpc leveldb::leveldb protobuf::libprotobuf)
 
 cc_library(

@@ -283,10 +283,6 @@ runtime::Options build_runtime_options(const Options& options,
 bool initialize_engine_options_from_config(const GraphConfig& config,
                                            int32_t global_rank,
                                            runtime::Options& runtime_options) {
-  if (!validate_graph_config(config)) {
-    return false;
-  }
-
   NodeConfig node;
   if (!find_node_config(config, global_rank, node)) {
     return false;
