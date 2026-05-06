@@ -40,7 +40,8 @@ class SpawnWorkerServer final {
                              bool enable_prefill_sp,
                              const std::string& task_type,
                              const std::string& worker_type,
-                             const std::string& communication_backend);
+                             const std::string& communication_backend,
+                             int64_t max_encoder_cache_size);
 
   ~SpawnWorkerServer();
 

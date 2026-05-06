@@ -33,6 +33,7 @@ limitations under the License.
 #include "core/common/types.h"
 #include "core/distributed_runtime/dit_master.h"
 #include "core/distributed_runtime/master.h"
+#include "core/distributed_runtime/vlm_master.h"
 #include "core/framework/xtensor/global_xtensor.h"
 #include "core/framework/xtensor/options.h"
 #include "core/framework/xtensor/xtensor_allocator.h"
@@ -104,6 +105,9 @@ void validate_flags(const std::string& model_type) {
       !prefill_sp_supported_model_set.contains(model_type)) {
     LOG(FATAL) << "enable_prefill_sp is not supported for model_type="
                << model_type;
+  }
+  if (FLAGS_max_encoder_cache_size < 0) {
+    LOG(FATAL) << "max_encoder_cache_size must be >= 0.";
   }
 #if defined(USE_MLU)
   // Disable enable_schedule_overlap for VLM models on MLU backend
@@ -222,6 +226,7 @@ int run() {
 #if defined(USE_NPU)
   options.npu_kernel_backend(FLAGS_npu_kernel_backend);
 #endif
+
   options.model_path(FLAGS_model)
       .model_id(FLAGS_model_id)
       .task_type(FLAGS_task)
@@ -234,6 +239,7 @@ int run() {
       .max_cache_size(FLAGS_max_cache_size)
       .max_memory_utilization(FLAGS_max_memory_utilization)
       .enable_prefix_cache(FLAGS_enable_prefix_cache)
+      .max_encoder_cache_size(FLAGS_max_encoder_cache_size)
       .max_tokens_per_batch(FLAGS_max_tokens_per_batch)
       .max_seqs_per_batch(FLAGS_max_seqs_per_batch)
       .max_tokens_per_chunk_for_prefill(FLAGS_max_tokens_per_chunk_for_prefill)
@@ -356,6 +362,8 @@ int run() {
   if (options.node_rank() != 0) {
     if (FLAGS_backend == "dit") {
       master = std::make_unique<DiTAssistantMaster>(options);
+    } else if (FLAGS_backend == "vlm") {
+      master = std::make_unique<VLMAssistantMaster>(options);
     } else {
       master = std::make_unique<LLMAssistantMaster>(options);
     }

@@ -63,7 +63,8 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
                                      bool enable_prefill_sp,
                                      const std::string& task_type,
                                      const std::string& worker_type,
-                                     const std::string& communication_backend) {
+                                     const std::string& communication_backend,
+                                     int64_t max_encoder_cache_size) {
   // TODO: pass whole xllm::runtime::Options here from main process.
   xllm::runtime::Options runner_options;
   const std::string backend = get_backend_from_worker_type(worker_type);
@@ -80,7 +81,8 @@ SpawnWorkerServer::SpawnWorkerServer(const std::string& master_node_addr,
       .input_shm_size(input_shm_size)
       .output_shm_size(output_shm_size)
       .is_local(is_local)
-      .task_type(task_type);
+      .task_type(task_type)
+      .max_encoder_cache_size(max_encoder_cache_size);
   FLAGS_enable_schedule_overlap = false;
   FLAGS_enable_prefill_sp = enable_prefill_sp;
   FLAGS_master_node_addr = master_node_addr;

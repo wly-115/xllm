@@ -224,6 +224,9 @@ void WorkerServer::create_spawn_server(int local_rank,
   const char* is_local_ptr = is_local_str.c_str();
   auto enable_prefill_sp_str = std::to_string(options.enable_prefill_sp());
   const char* enable_prefill_sp_ptr = enable_prefill_sp_str.c_str();
+  auto max_encoder_cache_size_str =
+      std::to_string(options.max_encoder_cache_size());
+  const char* max_encoder_cache_size_ptr = max_encoder_cache_size_str.c_str();
   const char* communication_backend_ptr = FLAGS_communication_backend.c_str();
   const char* worker_type_ptr = worker_type.to_string();
   std::string spawn_worker_bin_path =
@@ -245,6 +248,7 @@ void WorkerServer::create_spawn_server(int local_rank,
                         input_shm_size_ptr,
                         output_shm_size_ptr,
                         communication_backend_ptr,
+                        max_encoder_cache_size_ptr,
                         nullptr};
   pid_t pid;
   int status = posix_spawnp(

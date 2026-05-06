@@ -106,6 +106,11 @@ DEFINE_int32(max_tokens_for_graph_mode,
              "If 0, no limit is applied.");
 // --- vlm config ---
 
+DEFINE_int64(max_encoder_cache_size,
+             0,
+             "Max gpu/npu memory size in MB for encoder cache per worker. "
+             "Default is 0, which disables encoder cache.");
+
 DEFINE_int32(limit_image_per_prompt,
              4,
              "Maximum number of image per prompt. Only applicable for "

@@ -18,6 +18,10 @@ limitations under the License.
 #include <absl/strings/match.h>
 
 #include <numeric>
+#include <optional>
+#include <utility>
+
+#include "framework/encoder_cache/encoder_cache.h"
 
 namespace xllm {
 
@@ -310,6 +314,39 @@ bool UpdateMMItemScheduleStateVisitor::visit(MMDataItem& item) {
       std::min(computed_token_num_ - token_pos.offset + schedule_token_num,
                token_pos.length);
   mm_data_items_.push_back(item);
+  return true;
+}
+
+EncoderCacheLookupVisitor::EncoderCacheLookupVisitor(EncoderCache* cache)
+    : cache_(cache) {}
+
+bool EncoderCacheLookupVisitor::visit(MMDataItem& item) {
+  if (item.is_embedded()) {
+    return true;
+  }
+  std::optional<torch::Tensor> cached =
+      cache_->lookup(item.state().schedule_data().key);
+  if (!cached.has_value()) {
+    return true;
+  }
+  item.add(get_embedding_key(item.type()), cached.value());
+  return true;
+}
+
+EncoderCacheInsertVisitor::EncoderCacheInsertVisitor(EncoderCache* cache)
+    : cache_(cache) {}
+
+bool EncoderCacheInsertVisitor::visit(MMDataItem& item) {
+  if (!item.is_embedded()) {
+    return true;
+  }
+  const XXH3Key& key = item.state().schedule_data().key;
+  std::optional<torch::Tensor> embedding =
+      item.get<torch::Tensor>(get_embedding_key(item.type()));
+  if (!embedding.has_value()) {
+    return true;
+  }
+  cache_->insert(key, std::move(embedding.value()));
   return true;
 }
 

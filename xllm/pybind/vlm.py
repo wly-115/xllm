@@ -24,6 +24,7 @@ class VLM:
         max_cache_size: int = 0,
         max_memory_utilization: float = 0.9,
         disable_prefix_cache: bool = False,
+        max_encoder_cache_size: int = 0,
         max_tokens_per_batch: int = 50000,
         max_seqs_per_batch: int = 256,
         max_tokens_per_chunk_for_prefill: int = 512,
@@ -72,6 +73,7 @@ class VLM:
             options.enable_prefix_cache = False
         else:
             options.enable_prefix_cache = True
+        options.max_encoder_cache_size = max_encoder_cache_size
         options.max_tokens_per_batch = max_tokens_per_batch
         options.max_seqs_per_batch = max_seqs_per_batch
         options.max_tokens_per_chunk_for_prefill = max_tokens_per_chunk_for_prefill
