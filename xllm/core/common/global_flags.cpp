@@ -304,6 +304,11 @@ DEFINE_string(omni_master_addr,
               "The OmniMaster address for omni graph ready registration(e.g. "
               "10.18.1.1:9999).");
 
+DEFINE_string(omni_graph_config_path,
+              "",
+              "The omni graph config JSON path used by OmniMaster and "
+              "EngineServer startup.");
+
 DEFINE_string(
     xtensor_master_node_addr,
     "127.0.0.1:19889",

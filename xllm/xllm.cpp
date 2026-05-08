@@ -19,9 +19,11 @@ limitations under the License.
 #include <pybind11/embed.h>
 #include <torch/torch.h>
 
+#include <chrono>
 #include <csignal>
 #include <filesystem>
 #include <memory>
+#include <thread>
 #include <unordered_set>
 
 #include "api_service/api_service.h"
@@ -32,7 +34,9 @@ limitations under the License.
 #include "core/common/options.h"
 #include "core/common/types.h"
 #include "core/distributed_runtime/dit_master.h"
+#include "core/distributed_runtime/engine_server.h"
 #include "core/distributed_runtime/master.h"
+#include "core/distributed_runtime/omni_master.h"
 #include "core/framework/xtensor/global_xtensor.h"
 #include "core/framework/xtensor/options.h"
 #include "core/framework/xtensor/xtensor_allocator.h"
@@ -44,13 +48,15 @@ limitations under the License.
 #include "server/xllm_server_registry.h"
 using namespace xllm;
 
-static std::atomic<uint32_t> signal_received{0};
-
 static const std::unordered_set<std::string> prefill_sp_supported_model_set = {
     "deepseek_v32",
     "glm_moe_dsa"};
 
 namespace {
+
+volatile std::sig_atomic_t signal_received = 0;
+
+constexpr std::chrono::milliseconds kShutdownPollInterval(1000);
 
 void fix_mlu_disagg_pd_flags() {
   if (FLAGS_kv_cache_transfer_type != "Mooncake") {
@@ -87,13 +93,91 @@ void fix_mlu_disagg_pd_flags() {
   }
 }
 
-}  // namespace
-
 void shutdown_handler(int signal) {
-  // TODO: gracefully shutdown the server
-  LOG(WARNING) << "Received signal " << signal << ", stopping server...";
-  exit(1);
+  signal_received = static_cast<std::sig_atomic_t>(signal);
 }
+
+void install_shutdown_handler() {
+  std::signal(SIGINT, shutdown_handler);
+  std::signal(SIGTERM, shutdown_handler);
+}
+
+void wait_for_shutdown_signal() {
+  while (signal_received == 0) {
+    std::this_thread::sleep_for(kShutdownPollInterval);
+  }
+  LOG(WARNING) << "Received signal " << signal_received
+               << ", stopping server...";
+}
+
+bool is_omni_mode_enabled() { return !FLAGS_omni_graph_config_path.empty(); }
+
+bool load_omni_graph_config(ensemble::GraphConfig& graph_config) {
+  if (FLAGS_omni_graph_config_path.empty()) {
+    LOG(ERROR) << "omni_graph_config_path cannot be empty.";
+    return false;
+  }
+  if (!ensemble::load_graph_config_from_file(FLAGS_omni_graph_config_path,
+                                             graph_config)) {
+    return false;
+  }
+  return ensemble::validate_graph_config(graph_config);
+}
+
+int run_omni() {
+  ensemble::GraphConfig graph_config;
+  if (!load_omni_graph_config(graph_config)) {
+    LOG(ERROR) << "Failed to load omni graph config from "
+               << FLAGS_omni_graph_config_path;
+    return -1;
+  }
+
+  std::unique_ptr<OmniMaster> omni_master;
+  if (FLAGS_node_rank == 0) {
+    omni_master = std::make_unique<OmniMaster>();
+    if (!omni_master->prepare(graph_config)) {
+      LOG(ERROR) << "Failed to prepare OmniMaster.";
+      return -1;
+    }
+  }
+
+  EngineServer engine_server;
+  if (!engine_server.init(graph_config, FLAGS_node_rank)) {
+    LOG(ERROR) << "Failed to initialize EngineServer for node_rank="
+               << FLAGS_node_rank;
+    return -1;
+  }
+
+  if (omni_master != nullptr) {
+    if (!omni_master->finish_init()) {
+      LOG(ERROR) << "Failed to finish OmniMaster initialization for node_rank="
+                 << FLAGS_node_rank;
+      return -1;
+    }
+  }
+
+  if (FLAGS_node_rank == 0) {
+    XllmServer* http_server =
+        ServerRegistry::get_instance().register_server("HttpServer");
+    if (!http_server->start_http_server()) {
+      LOG(ERROR) << "Failed to start HttpServer for omni startup.";
+      ServerRegistry::get_instance().unregister_server("HttpServer");
+      return -1;
+    }
+    return 0;
+  }
+
+  if (engine_server.exposes_service()) {
+    engine_server.run();
+    return 0;
+  }
+
+  install_shutdown_handler();
+  wait_for_shutdown_signal();
+  return 0;
+}
+
+}  // namespace
 
 void validate_flags(const std::string& model_type) {
   if (FLAGS_backend.empty()) {
@@ -161,6 +245,10 @@ void validate_flags(const std::string& model_type) {
 }
 
 int run() {
+  if (is_omni_mode_enabled()) {
+    return run_omni();
+  }
+
   // check if model path exists
   if (!std::filesystem::exists(FLAGS_model)) {
     LOG(FATAL) << "Model path " << FLAGS_model << " does not exist.";
@@ -410,8 +498,8 @@ int main(int argc, char** argv) {
 
   google::InitGoogleLogging("xllm");
 
-  // Check if model path is provided
-  if (FLAGS_model.empty()) {
+  // Check if model path is provided for legacy startup path.
+  if (!is_omni_mode_enabled() && FLAGS_model.empty()) {
     HelpFormatter::print_error("--model flag is required");
     return 1;
   }

@@ -79,6 +79,8 @@ else()
       xllm.cpp
     DEPS
       :flags
+      :engine_server
+      :omni_master
       :xllm_server
       :master
       absl::strings

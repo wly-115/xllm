@@ -19,39 +19,34 @@ limitations under the License.
 #include <memory>
 #include <string>
 
-#include "core/distributed_runtime/engine.h"
-#include "core/distributed_runtime/engine_service.h"
 #include "core/framework/ensemble/graph_config.h"
 #include "core/runtime/options.h"
 
 namespace xllm {
+
+class Engine;
+class EngineService;
 
 class EngineServer final {
  public:
   EngineServer() = default;
   ~EngineServer();
 
-  bool init(const std::string& graph_config_path, int32_t node_rank);
   bool init(const ensemble::GraphConfig& graph_config, int32_t node_rank);
-
-  EngineService* service() const;
-  Engine* engine() const;
+  bool exposes_service() const;
+  void run();
 
  private:
-  bool load_graph_config(const std::string& graph_config_path,
-                         ensemble::GraphConfig& graph_config) const;
-  bool select_node(const ensemble::GraphConfig& graph_config,
-                   int32_t node_rank);
-  bool create_engine();
-  bool init_engine_service(int32_t node_rank);
-  bool start_service_endpoint();
-  bool register_service();
+  void create_engine();
+  bool start_leader_service(int32_t node_rank);
+  bool register_ready();
+  void stop_service_endpoint();
 
   ensemble::NodeConfig node_config_;
   runtime::Options options_;
   std::unique_ptr<Engine> engine_;
   std::unique_ptr<EngineService> service_;
-  std::string server_name_;
+  std::string service_server_name_;
 };
 
 }  // namespace xllm

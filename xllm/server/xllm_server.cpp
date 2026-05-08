@@ -123,6 +123,16 @@ bool XllmServer::start(std::unique_ptr<APIService> service) {
     LOG(INFO) << "No API routes enabled on current node mode.";
   }
 
+  return start_foreground_server("");
+}
+
+bool XllmServer::start_http_server() {
+  LOG(INFO) << "No API routes enabled for omni init smoke.";
+  server_ = std::make_unique<brpc::Server>();
+  return start_foreground_server(" for omni init smoke");
+}
+
+bool XllmServer::start_foreground_server(const std::string& startup_suffix) {
   brpc::ServerOptions options;
   // TODO: enable arean message factory later.
   // options.rpc_pb_message_factory =
@@ -135,7 +145,7 @@ bool XllmServer::start(std::unique_ptr<APIService> service) {
     LOG(ERROR) << "Failed to start server on port " << FLAGS_port;
     return false;
   }
-  LOG(INFO) << "Brpc Server started on port " << FLAGS_port
+  LOG(INFO) << "Brpc Server started on port " << FLAGS_port << startup_suffix
             << ", idle_timeout_s: " << FLAGS_rpc_idle_timeout_s
             << ", num_threads: " << FLAGS_num_threads;
 
@@ -144,7 +154,7 @@ bool XllmServer::start(std::unique_ptr<APIService> service) {
   listen_port_ = FLAGS_port;
   has_initialized_ = true;
 
-  auto pid = getpid();
+  const pid_t pid = getpid();
   LOG(INFO) << "     Started server process [" << pid << "]";
   LOG(INFO) << "     Waiting for application startup.";
   LOG(INFO) << "     Application startup complete.";

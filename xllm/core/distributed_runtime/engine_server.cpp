@@ -19,10 +19,9 @@ limitations under the License.
 #include <brpc/controller.h>
 #include <glog/logging.h>
 
-#include <utility>
-
 #include "core/common/global_flags.h"
 #include "core/distributed_runtime/dit_engine.h"
+#include "core/distributed_runtime/engine_service.h"
 #include "core/distributed_runtime/vlm_engine.h"
 #include "core/framework/ensemble/engine_config.h"
 #include "server/xllm_server_registry.h"
@@ -33,140 +32,75 @@ namespace {
 
 constexpr int32_t kReadyRegisterTimeoutMs = 10000;
 constexpr int32_t kReadyRegisterMaxRetry = 3;
-
-bool find_node_config(const ensemble::GraphConfig& graph_config,
-                      int32_t node_rank,
-                      ensemble::NodeConfig& node_config) {
-  for (const ensemble::NodeConfig& candidate : graph_config.nodes) {
-    if (candidate.ranks.find(node_rank) != candidate.ranks.end()) {
-      node_config = candidate;
-      return true;
-    }
-  }
-  LOG(ERROR) << "node_rank does not belong to any graph node: " << node_rank;
-  return false;
-}
+constexpr const char* kEngineServiceServerPrefix = "EngineService:";
 
 }  // namespace
 
-EngineServer::~EngineServer() {
-  if (server_name_.empty()) {
-    return;
-  }
-  ServerRegistry::get_instance().unregister_server(server_name_);
-}
-
-bool EngineServer::init(const std::string& graph_config_path,
-                        int32_t node_rank) {
-  ensemble::GraphConfig graph_config;
-  if (!load_graph_config(graph_config_path, graph_config)) {
-    return false;
-  }
-  return init(graph_config, node_rank);
-}
+EngineServer::~EngineServer() { stop_service_endpoint(); }
 
 bool EngineServer::init(const ensemble::GraphConfig& graph_config,
                         int32_t node_rank) {
-  if (node_rank < 0) {
-    LOG(ERROR) << "node_rank must be non-negative.";
-    return false;
+  for (const ensemble::NodeConfig& candidate : graph_config.nodes) {
+    if (candidate.ranks.find(node_rank) != candidate.ranks.end()) {
+      node_config_ = candidate;
+      break;
+    }
   }
-  if (!ensemble::validate_graph_config(graph_config)) {
-    return false;
+  ensemble::initialize_engine_options_from_config(
+      graph_config, node_rank, options_);
+  CHECK(create_engine());
+
+  if (node_config_.ranks.begin()->first != node_rank) {
+    LOG(INFO) << "Initialized non-leader engine runtime for graph node "
+              << node_config_.name << ", node_rank=" << node_rank;
+    return true;
   }
 
-  if (!select_node(graph_config, node_rank)) {
-    return false;
-  }
-  if (!ensemble::initialize_engine_options_from_config(
-          graph_config, node_rank, options_)) {
-    return false;
-  }
-  if (!create_engine()) {
-    return false;
-  }
-
-  if (!engine_->init()) {
-    LOG(ERROR) << "Failed to initialize engine for graph node "
-               << node_config_.name << ", backend=" << options_.backend();
-    return false;
-  }
-  if (!init_engine_service(node_rank)) {
-    return false;
-  }
-
-  return true;
+  return start_leader_service(node_rank);
 }
 
-EngineService* EngineServer::service() const { return service_.get(); }
-
-Engine* EngineServer::engine() const { return engine_.get(); }
-
-bool EngineServer::load_graph_config(
-    const std::string& graph_config_path,
-    ensemble::GraphConfig& graph_config) const {
-  if (graph_config_path.empty()) {
-    LOG(ERROR) << "graph_config_path cannot be empty.";
-    return false;
-  }
-  return ensemble::load_graph_config_from_file(graph_config_path, graph_config);
-}
-
-bool EngineServer::select_node(const ensemble::GraphConfig& graph_config,
-                               int32_t node_rank) {
-  ensemble::NodeConfig node_config;
-  if (!find_node_config(graph_config, node_rank, node_config)) {
-    return false;
-  }
-
-  node_config_ = std::move(node_config);
-  return true;
-}
-
-bool EngineServer::create_engine() {
+void EngineServer::create_engine() {
   const std::string backend = options_.backend();
   if (backend == "vlm") {
     engine_ = std::make_unique<VLMEngine>(options_);
   } else if (backend == "dit") {
     engine_ = std::make_unique<DiTEngine>(options_);
   } else {
-    LOG(ERROR) << "Unsupported engine backend for graph node "
+    LOG(FATAL) << "Unsupported engine backend for graph node "
                << node_config_.name << ": " << backend;
-    return false;
   }
-  return true;
 }
 
-bool EngineServer::init_engine_service(int32_t node_rank) {
-  const bool is_leader = node_config_.ranks.begin()->first == node_rank;
-  if (!is_leader) {
-    LOG(INFO) << "Initialized non-leader engine runtime for graph node "
-              << node_config_.name << ", node_rank=" << node_rank;
-    return true;
-  }
+bool EngineServer::exposes_service() const {
+  return !service_server_name_.empty();
+}
+
+void EngineServer::run() {
+  CHECK(!service_server_name_.empty())
+      << "EngineServer does not expose EngineService.";
+
+  XllmServer* server =
+      ServerRegistry::get_instance().try_get_server(service_server_name_);
+  CHECK(server != nullptr) << "EngineService server is not registered: "
+                           << service_server_name_;
+  server->run();
+}
+
+bool EngineServer::start_leader_service(int32_t node_rank) {
+  CHECK(engine_->init());
 
   service_ = std::make_unique<EngineService>(engine_.get());
   LOG(INFO) << "Initialized EngineService skeleton for graph node "
             << node_config_.name << ", node_rank=" << node_rank;
-  if (!start_service_endpoint()) {
-    return false;
-  }
-  if (!register_service()) {
-    ServerRegistry::get_instance().unregister_server(server_name_);
-    server_name_.clear();
-    return false;
-  }
-  return true;
-}
-
-bool EngineServer::start_service_endpoint() {
-  if (node_config_.endpoint.target.empty()) {
+  const std::string& target = node_config_.endpoint.target;
+  if (target.empty()) {
     LOG(ERROR) << "EngineService endpoint target cannot be empty for node: "
                << node_config_.name;
     return false;
   }
 
-  const std::string server_name = "EngineService:" + node_config_.name;
+  const std::string server_name =
+      std::string(kEngineServiceServerPrefix) + node_config_.name;
   auto& registry = ServerRegistry::get_instance();
   if (registry.try_get_server(server_name) != nullptr) {
     LOG(ERROR) << "EngineService endpoint has already been registered: "
@@ -175,26 +109,29 @@ bool EngineServer::start_service_endpoint() {
   }
 
   XllmServer* server = registry.register_server(server_name);
-  if (!server->start(
-          service_.get(), node_config_.endpoint.target, server_name)) {
+  if (!server->start(service_.get(), target, server_name)) {
     LOG(ERROR) << "Failed to start EngineService endpoint for graph node "
-               << node_config_.name
-               << ", target=" << node_config_.endpoint.target;
+               << node_config_.name << ", target=" << target;
     registry.unregister_server(server_name);
     return false;
   }
 
-  server_name_ = server_name;
+  service_server_name_ = server_name;
   LOG(INFO) << "Started EngineService endpoint for graph node "
-            << node_config_.name << ", target=" << node_config_.endpoint.target;
+            << node_config_.name << ", target=" << target;
+  if (!register_ready()) {
+    stop_service_endpoint();
+    return false;
+  }
   return true;
 }
 
-bool EngineServer::register_service() {
+bool EngineServer::register_ready() {
   if (FLAGS_omni_master_addr.empty()) {
     LOG(ERROR) << "omni_master_addr cannot be empty.";
     return false;
   }
+  const std::string& target = node_config_.endpoint.target;
 
   brpc::ChannelOptions options;
   options.connection_type = "single";
@@ -212,7 +149,7 @@ bool EngineServer::register_service() {
 
   proto::EnsembleNodeReadyRequest request;
   request.set_node_name(node_config_.name);
-  request.set_target(node_config_.endpoint.target);
+  request.set_target(target);
 
   proto::EnsembleNodeReadyResponse response;
   brpc::Controller controller;
@@ -226,15 +163,22 @@ bool EngineServer::register_service() {
   }
   if (!response.ok()) {
     LOG(ERROR) << "Ready registration rejected for graph node "
-               << node_config_.name
-               << ", target=" << node_config_.endpoint.target;
+               << node_config_.name << ", target=" << target;
     return false;
   }
 
   LOG(INFO) << "Registered ready for graph node " << node_config_.name
-            << ", target=" << node_config_.endpoint.target
+            << ", target=" << target
             << ", omni_master_addr=" << FLAGS_omni_master_addr;
   return true;
+}
+
+void EngineServer::stop_service_endpoint() {
+  if (service_server_name_.empty()) {
+    return;
+  }
+  ServerRegistry::get_instance().unregister_server(service_server_name_);
+  service_server_name_.clear();
 }
 
 }  // namespace xllm

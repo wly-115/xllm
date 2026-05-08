@@ -39,6 +39,7 @@ class XllmServer final {
   ~XllmServer();
 
   bool start(std::unique_ptr<APIService> api_service);
+  bool start_http_server();
   bool start(std::unique_ptr<DisaggPDService> disagg_pd_service);
   bool start(std::unique_ptr<PDOOCService> pd_ooc_service);
   bool start(std::shared_ptr<CollectiveService> service,
@@ -64,6 +65,7 @@ class XllmServer final {
                      const std::string& addr,
                      int port,
                      const std::string& server_name);
+  bool start_foreground_server(const std::string& startup_suffix);
 
  private:
   bool has_initialized_ = false;

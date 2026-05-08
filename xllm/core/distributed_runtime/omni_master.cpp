@@ -21,7 +21,6 @@ limitations under the License.
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 #include "core/common/global_flags.h"
 #include "core/distributed_runtime/ensemble_engine.h"
@@ -32,51 +31,23 @@ limitations under the License.
 
 namespace xllm {
 
-OmniMaster::~OmniMaster() {
-  if (ready_server_name_.empty()) {
-    return;
-  }
-  ServerRegistry::get_instance().unregister_server(ready_server_name_);
+OmniMaster::~OmniMaster() { stop_ready_service(); }
+
+bool OmniMaster::prepare(const ensemble::GraphConfig& graph_config) {
+  graph_config_ = graph_config;
+  const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
+  ready_service_ = std::make_shared<EnsembleNodeReadyService>(total_num);
+  return start_ready_service();
 }
 
-bool OmniMaster::init(const std::string& graph_config_path, int32_t node_rank) {
-  if (!validate_init_args(graph_config_path, node_rank)) {
-    return false;
-  }
-  if (!load_graph_config(graph_config_path)) {
-    return false;
-  }
+bool OmniMaster::finish_init() {
   if (!wait_engine_services_ready()) {
     return false;
   }
 
-  return create_ensemble_engine(build_graph());
-}
-
-bool OmniMaster::validate_init_args(const std::string& graph_config_path,
-                                    int32_t node_rank) const {
-  if (graph_config_path.empty()) {
-    LOG(ERROR) << "graph_config_path cannot be empty.";
-    return false;
-  }
-  if (node_rank < 0) {
-    LOG(ERROR) << "node_rank must be non-negative.";
-    return false;
-  }
-  return true;
-}
-
-bool OmniMaster::load_graph_config(const std::string& graph_config_path) {
-  ensemble::GraphConfig graph_config;
-  if (!ensemble::load_graph_config_from_file(graph_config_path, graph_config)) {
-    return false;
-  }
-
-  if (!ensemble::validate_graph_config(graph_config)) {
-    return false;
-  }
-
-  graph_config_ = std::move(graph_config);
+  ensemble_engine_ =
+      std::make_shared<EnsembleEngine>(std::make_shared<const ensemble::Graph>(
+          ensemble::build_graph_from_config(graph_config_)));
   return true;
 }
 
@@ -109,19 +80,18 @@ bool OmniMaster::start_ready_service() {
 }
 
 bool OmniMaster::wait_engine_services_ready() {
-  const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
-  ready_service_ = std::make_shared<EnsembleNodeReadyService>(total_num);
-  if (!start_ready_service()) {
+  if (ready_service_ == nullptr) {
+    LOG(ERROR) << "ready_service must be initialized before waiting.";
     return false;
   }
 
   std::unordered_map<std::string, std::string> ready_targets =
       ready_service_->wait(graph_config_.ready_timeout_ms);
+  const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
   if (static_cast<int32_t>(ready_targets.size()) != total_num) {
     LOG(ERROR) << "Not all engine services are ready. expected=" << total_num
                << ", actual=" << ready_targets.size();
-    ServerRegistry::get_instance().unregister_server(ready_server_name_);
-    ready_server_name_.clear();
+    stop_ready_service();
     return false;
   }
 
@@ -129,32 +99,23 @@ bool OmniMaster::wait_engine_services_ready() {
     auto ready_it = ready_targets.find(node.name);
     if (ready_it == ready_targets.end()) {
       LOG(ERROR) << "Missing ready target for node: " << node.name;
-      ServerRegistry::get_instance().unregister_server(ready_server_name_);
-      ready_server_name_.clear();
+      stop_ready_service();
       return false;
     }
     node.endpoint.target = ready_it->second;
   }
 
-  ServerRegistry::get_instance().unregister_server(ready_server_name_);
-  ready_server_name_.clear();
+  stop_ready_service();
   return true;
 }
 
-std::shared_ptr<const ensemble::Graph> OmniMaster::build_graph() const {
-  return std::make_shared<const ensemble::Graph>(
-      ensemble::build_graph_from_config(graph_config_));
-}
-
-bool OmniMaster::create_ensemble_engine(
-    std::shared_ptr<const ensemble::Graph> graph) {
-  if (graph == nullptr) {
-    LOG(ERROR) << "graph cannot be null.";
-    return false;
+void OmniMaster::stop_ready_service() {
+  if (ready_server_name_.empty()) {
+    return;
   }
 
-  ensemble_engine_ = std::make_shared<EnsembleEngine>(std::move(graph));
-  return true;
+  ServerRegistry::get_instance().unregister_server(ready_server_name_);
+  ready_server_name_.clear();
 }
 
 }  // namespace xllm

@@ -118,6 +118,8 @@ DECLARE_string(master_node_addr);
 
 DECLARE_string(omni_master_addr);
 
+DECLARE_string(omni_graph_config_path);
+
 DECLARE_string(xtensor_master_node_addr);
 
 DECLARE_bool(enable_disagg_pd);
