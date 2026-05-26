@@ -88,6 +88,8 @@ class NpuQwen3DecoderLayerImpl : public BaseLayer {
 
   int64_t init_attn_mask();
 
+  int64_t init_fia_attn_mask();
+
   atb_speed::Model::Node prefill_node_;
   atb_speed::Model::Node decode_node_;
   std::string model_name_;
@@ -97,6 +99,7 @@ class NpuQwen3DecoderLayerImpl : public BaseLayer {
   atb::Tensor placeholder_;
 
   at::Tensor decode_attn_mask_;
+  at::Tensor fia_attn_mask_;
 
   at::Tensor at_placeholder_;
 

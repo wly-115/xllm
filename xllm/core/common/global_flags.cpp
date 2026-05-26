@@ -169,6 +169,8 @@ DEFINE_bool(enable_prefill_sp,
             false,
             "Whether to enable prefill-only sequence parallel.");
 
+DEFINE_bool(enable_fia, false, "Whether to enable fused infer attention.");
+
 DEFINE_int32(max_tokens_per_chunk_for_prefill,
              -1,
              "Max number of token per chunk in prefill stage.");
