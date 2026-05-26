@@ -64,6 +64,7 @@ class BatchInputBuilder {
                                   uint32_t n_kv_cache_tokens,
                                   uint32_t q_seq_len,
                                   int32_t seq_index);
+  void log_batch_size() const;
   ForwardInput state_to_forward_input();
   RawForwardInput state_to_raw_forward_input();
 

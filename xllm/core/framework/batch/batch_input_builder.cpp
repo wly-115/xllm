@@ -16,6 +16,7 @@ limitations under the License.
 #include "batch_input_builder.h"
 
 #include <c10/core/DeviceType.h>
+#include <glog/logging.h>
 #include <torch/torch.h>
 
 #include <algorithm>
@@ -101,6 +102,7 @@ BatchInputBuilder::BatchInputBuilder(
       swap_block_transfer_infos_(swap_block_transfer_infos),
       batch_id_(batch_id),
       cp_size_(std::max(1, cp_size)) {
+  log_batch_size();
   // Reserve space for better performance
   state_.flatten_tokens_vec.reserve(1000);
   state_.flatten_positions_vec.reserve(1000);
@@ -181,6 +183,18 @@ ForwardInput BatchInputBuilder::build_forward_input(
 RawForwardInput BatchInputBuilder::build_raw_forward_input() {
   process_sequences();
   return state_to_raw_forward_input();
+}
+
+void BatchInputBuilder::log_batch_size() const {
+  uint32_t decode_num = 0;
+  for (const Sequence* sequence : sequences_) {
+    if (sequence != nullptr && sequence->stage() == SequenceStage::DECODE) {
+      ++decode_num;
+    }
+  }
+
+  VLOG(1) << "BatchInputBuilder batch_size=" << num_sequences_
+          << ", decode_num=" << decode_num;
 }
 
 void BatchInputBuilder::process_sequences() {
