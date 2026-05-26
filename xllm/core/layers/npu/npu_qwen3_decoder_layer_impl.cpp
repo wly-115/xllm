@@ -81,11 +81,13 @@ void NpuQwen3DecoderLayerImpl::param_from_args(
 
   param.numHiddenLayers = args.n_layers();
   param.enableIntraLayerAddNorm = true;
-  param.enableInterLayerAddNorm = false;
+  param.enableInterLayerAddNorm = FLAGS_enable_interlayer_addnorm;
+  param.enableSplitRmsNormRope = FLAGS_enable_split_rmsnorm_rope && !isPrefill;
   param.enablePreFetchWeight = FLAGS_enable_prefetch_weight;
   param.enableAclGraphPagedAttention = FLAGS_enable_graph && !isPrefill;
   initialize_parallel_parameters(param, parallel_args);
   initialize_quantization_parameters(param);
+  num_hidden_layers_ = args.n_layers();
 
   if (isPrefill) {
     param.enableAclnnRmsNorm =
@@ -221,7 +223,7 @@ int64_t NpuQwen3DecoderLayerImpl::init_node(
   CHECK_NOTNULL(node.operation);
   CHECK_GT(node.operation->GetInputNum(), 0);
   node.inTensors.resize(node.operation->GetInputNum());
-  node.outTensors.resize(1);
+  node.outTensors.resize(node.operation->GetOutputNum());
   size_t inTensorId = 1;
 
   for (size_t weightTensorId = 0; weightTensorId < kWeightCountPerLayer;
@@ -231,8 +233,8 @@ int64_t NpuQwen3DecoderLayerImpl::init_node(
 
   node.variantPack.inTensors.reserve(node.inTensors.size());
   node.variantPack.inTensors.resize(node.inTensors.size());
-  node.variantPack.outTensors.reserve(1);
-  node.variantPack.outTensors.resize(1);
+  node.variantPack.outTensors.reserve(node.outTensors.size());
+  node.variantPack.outTensors.resize(node.outTensors.size());
 
   return atb::NO_ERROR;
 }
@@ -290,6 +292,9 @@ void NpuQwen3DecoderLayerImpl::build_node_variant_pack(
     bool is_prefill,
     int node_id) {
   internal_tensors_ = atb_speed::Utils::AtTensor2Tensor(x);
+  if (FLAGS_enable_interlayer_addnorm && residual_ != nullptr) {
+    residual_tensors_ = atb_speed::Utils::AtTensor2Tensor(*residual_);
+  }
   node.variantPack.inTensors.at(kWeightCountPerLayer) = internal_tensors_;
   node.variantPack.inTensors.at(kWeightCountPerLayer + 1) =
       atb_speed::Utils::AtTensor2Tensor(cos_pos);
@@ -352,6 +357,10 @@ void NpuQwen3DecoderLayerImpl::build_node_variant_pack(
         input_params.q_seq_lens_vec.data();
   }
 
+  if (FLAGS_enable_interlayer_addnorm && node_id > 0 && residual_ != nullptr) {
+    node.variantPack.inTensors.at(input_idx++) = residual_tensors_;
+  }
+
   if (FLAGS_enable_graph && !is_prefill &&
       input_params.graph_buffer.tiling_data.defined()) {
     node.variantPack.inTensors.at(input_idx++) =
@@ -366,6 +375,10 @@ void NpuQwen3DecoderLayerImpl::build_node_variant_pack(
   }
 
   node.variantPack.outTensors.at(0) = internal_tensors_;
+  if (FLAGS_enable_interlayer_addnorm && node_id < num_hidden_layers_ - 1 &&
+      residual_ != nullptr && node.operation->GetOutputNum() > 1) {
+    node.variantPack.outTensors.at(1) = residual_tensors_;
+  }
 }
 
 }  // namespace layer

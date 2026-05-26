@@ -716,6 +716,14 @@ DEFINE_string(npu_kernel_backend,
 DEFINE_bool(enable_intralayer_addnorm,
             false,
             "enable fused intralayer addnorm ops.");
+
+DEFINE_bool(enable_interlayer_addnorm,
+            false,
+            "enable fused interlayer addnorm ops.");
+
+DEFINE_bool(enable_split_rmsnorm_rope,
+            false,
+            "enable fused split rmsnorm rope ops.");
 #endif
 
 // --- multi-step decode config ---

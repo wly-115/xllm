@@ -120,6 +120,9 @@ const OptionCategory kOtherOptions = {
      "num_response_handling_threads",
      "prefill_scheduling_memory_usage_threshold",
      "use_contiguous_input_buffer",
+     "enable_intralayer_addnorm",
+     "enable_interlayer_addnorm",
+     "enable_split_rmsnorm_rope",
      "use_audio_in_video"}};
 
 const std::vector<OptionCategory> kOptionCategories = {

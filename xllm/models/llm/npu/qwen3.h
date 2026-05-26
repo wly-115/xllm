@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <torch/nn/functional/normalization.h>
 
+#include <memory>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -130,6 +131,12 @@ class QWen3ModelImpl : public LlmModelImplBase<QWen3DecoderLayer> {
       h = inputs_embeds;
     } else {
       h = npu_embed_tokens_(tokens, 0);
+    }
+
+    if (FLAGS_enable_interlayer_addnorm) {
+      auto residual =
+          std::make_shared<torch::Tensor>(torch::zeros_like(h, h.options()));
+      set_residual(residual);
     }
     if (use_deepstack) {
       deep_stacks = input_params.deep_stacks;  // [num_deepstack, hidden_size]
