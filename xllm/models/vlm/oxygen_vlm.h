@@ -22,8 +22,8 @@ limitations under the License.
 #include "core/layers/qwen2_decoder_layer.h"
 #include "models/llm/oxygen.h"
 #include "models/model_registry.h"
-#include "processors/input_processor.h"
 #include "processors/qwen2_vl_image_processor.h"
+#include "processors/qwen2_vl_video_processor.h"
 #include "qwen2_5_vl.h"
 
 namespace xllm {
@@ -708,9 +708,12 @@ class OxygenvlmForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(OxygenvlmForConditionalGeneration);
 
-REGISTER_INPUT_PROCESSOR(oxygenvlm, Qwen2_5_VLInputProcessor);
+using OxygenVLMultimodalProcessor =
+    MultimodalProcessor<Qwen2_5_VLPromptProcessor,
+                        Qwen2VLImageProcessor,
+                        Qwen2VLVideoProcessor>;
+REGISTER_MULTIMODAL_PROCESSOR(oxygenvlm, OxygenVLMultimodalProcessor);
 REGISTER_CAUSAL_VLM_MODEL(oxygenvlm, OxygenvlmForConditionalGeneration);
-REGISTER_IMAGE_PROCESSOR(oxygenvlm, Qwen2VLImageProcessor);
 
 // register the model args
 REGISTER_MODEL_ARGS(oxygenvlm, [&] {

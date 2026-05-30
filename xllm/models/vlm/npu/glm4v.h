@@ -31,7 +31,8 @@ limitations under the License.
 #include "models/model_registry.h"
 #include "models/vlm/utils/multimodal_utils.h"
 #include "processors/glm4v_image_processor.h"
-#include "processors/glm4v_input_processor.h"
+#include "processors/glm4v_prompt_processor.h"
+#include "processors/glm4v_video_processor.h"
 #include "torch_npu/csrc/aten/CustomFunctions.h"
 #include "xllm/core/layers/npu/npu_glm4_vision_encoder_layer_impl.h"
 
@@ -830,9 +831,11 @@ class Glm4vForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(Glm4vForConditionalGeneration);
 
-REGISTER_INPUT_PROCESSOR(glm4v, GLM4VInputProcessor);
+using Glm4vMultimodalProcessor = MultimodalProcessor<GLM4VPromptProcessor,
+                                                     Glm4VImageProcessor,
+                                                     Glm4VVideoProcessor>;
+REGISTER_MULTIMODAL_PROCESSOR(glm4v, Glm4vMultimodalProcessor);
 REGISTER_CAUSAL_VLM_MODEL(glm4v, Glm4vForConditionalGeneration);
-REGISTER_IMAGE_PROCESSOR(glm4v, Glm4VImageProcessor);
 // register the model args
 REGISTER_MODEL_ARGS(glm4v, [&] {
   LOAD_ARG_OR(model_type, "model_type", "glm4v");

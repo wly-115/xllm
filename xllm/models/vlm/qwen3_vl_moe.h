@@ -20,8 +20,14 @@ limitations under the License.
 #include "core/layers/qwen3_vision_layer.h"
 #include "models/llm/qwen3_moe.h"
 #include "models/model_registry.h"
+<<<<<<< HEAD
 #include "processors/qwen3_vl_image_processor.h"
 #include "processors/qwen3_vl_input_processor.h"
+=======
+#include "processors/qwen2_vl_image_processor.h"
+#include "processors/qwen2_vl_video_processor.h"
+#include "qwen2_5_vl.h"
+>>>>>>> a6abe048 (refactor: restructure multimodal processor pipeline.)
 #include "qwen3_vl.h"
 
 namespace xllm {
@@ -211,9 +217,18 @@ class Qwen3_VLMoeForConditionalGenerationImpl : public torch::nn::Module {
 };
 TORCH_MODULE(Qwen3_VLMoeForConditionalGeneration);
 
+<<<<<<< HEAD
 REGISTER_INPUT_PROCESSOR(qwen3_vl_moe, Qwen3_VLInputProcessor);
 REGISTER_CAUSAL_VLM_MODEL(qwen3_vl_moe, Qwen3_VLMoeForConditionalGeneration);
 REGISTER_IMAGE_PROCESSOR(qwen3_vl_moe, Qwen3VLImageProcessor);
+=======
+using Qwen3VLMoeMultimodalProcessor =
+    MultimodalProcessor<Qwen2VLPromptProcessor,
+                        Qwen2VLImageProcessor,
+                        Qwen2VLVideoProcessor>;
+REGISTER_MULTIMODAL_PROCESSOR(qwen3_vl_moe, Qwen3VLMoeMultimodalProcessor);
+REGISTER_CAUSAL_VLM_MODEL(qwen3_vl_moe, Qwen3_VLMoeForConditionalGeneration);
+>>>>>>> a6abe048 (refactor: restructure multimodal processor pipeline.)
 
 // register the model args
 REGISTER_MODEL_ARGS(qwen3_vl_moe, [&] {
