@@ -23,6 +23,7 @@ limitations under the License.
 #include "core/framework/model/model_args.h"
 #include "core/framework/tokenizer/tokenizer.h"
 #include "core/framework/tokenizer/tokenizer_args.h"
+#include "core/util/hash_util.h"
 #include "models/model_registry.h"
 #include "util/timer.h"
 
@@ -36,7 +37,7 @@ MultimodalProcessorBase::MultimodalProcessorBase(
 
 MultimodalProcessorBase::~MultimodalProcessorBase() = default;
 
-bool MultimodalProcessorBase::render_prompt(
+bool MultimodalProcessorBase::apply_chat_template(
     const std::vector<Message>& messages,
     const std::vector<JsonTool>& tools,
     const nlohmann::ordered_json& chat_template_kwargs,
@@ -56,17 +57,35 @@ bool MultimodalProcessorBase::render_prompt(
   return true;
 }
 
-bool MultimodalProcessorBase::encode_prompt(const std::string& prompt,
-                                            std::vector<int32_t>& prompt_tokens,
-                                            std::string& error_message) const {
+bool MultimodalProcessorBase::tokenize(const std::string& prompt,
+                                       std::vector<int32_t>& token_ids,
+                                       std::string& error_message) const {
   Timer timer;
-  if (!tokenizer_->encode(prompt, &prompt_tokens)) {
+  if (!tokenizer_->encode(prompt, &token_ids)) {
     error_message = "Failed to encode prompt: " + prompt;
     LOG(ERROR) << error_message;
     return false;
   }
   COUNTER_ADD(tokenization_latency_seconds, timer.elapsed_seconds());
   return true;
+}
+
+void MultimodalProcessorBase::hash_mm_items(const MMInput& mm_input,
+                                            MMData& mm_data) {
+  const auto& mm_input_items = mm_input.items();
+  auto& mm_items = mm_data.items<MMItemVec>();
+  size_t size = mm_input_items.size();
+  for (size_t idx = 0; idx < size; ++idx) {
+    const std::string& data = mm_input_items[idx].raw_data;
+    if (!data.empty()) {
+      XXH3Key mm_hash = hash_string(data);
+      auto& schedule_data =
+          mm_items[idx].mutable_state().mutable_schedule_data();
+      schedule_data.key = mm_hash;
+    } else {
+      LOG(WARNING) << "Empty data for multimodal item";
+    }
+  }
 }
 
 std::unique_ptr<MultimodalProcessorBase> create_multimodal_processor(

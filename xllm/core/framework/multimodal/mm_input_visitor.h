@@ -15,42 +15,34 @@ limitations under the License.
 
 #pragma once
 
-#include <glog/logging.h>
 #include <torch/torch.h>
 
+#include <cstdint>
 #include <vector>
 
-#include "core/framework/model/model_args.h"
 #include "core/framework/multimodal/mm_data.h"
 #include "core/framework/multimodal/mm_input.h"
+#include "core/framework/multimodal/mm_type.h"
 
 namespace xllm {
 
-class ImageProcessor {
+class ImageProcessor;
+
+class MMInputGatherVisitor final : public MMInputItem::IVisitor {
  public:
-  virtual ~ImageProcessor() = default;
+  MMInputGatherVisitor(const ImageProcessor* image_processor, MMData& data);
 
-  virtual bool process(const std::vector<torch::Tensor>& images,
-                       std::vector<MMDataItem>& output_items) const = 0;
+  bool visit(const MMInputItem& item) override;
 
-  virtual MMDict process_embedding(const EmbeddingOutput& embedding) const = 0;
-};
+  std::vector<torch::Tensor> images_;
+  std::vector<torch::Tensor> videos_;
+  std::vector<torch::Tensor> audios_;
+  std::vector<VideoMetadata> video_metadata_;
+  std::vector<AudioMetadata> audio_metadata_;
 
-class ImageNoneProcessor final : public ImageProcessor {
- public:
-  ImageNoneProcessor() = default;
-  explicit ImageNoneProcessor(const ModelArgs&) {}
-
-  bool process(const std::vector<torch::Tensor>& images,
-               std::vector<MMDataItem>& output_items) const override {
-    LOG(ERROR) << "Image processor is not configured.";
-    return false;
-  }
-
-  MMDict process_embedding(const EmbeddingOutput&) const override {
-    LOG(ERROR) << "Image embedding processor is not configured.";
-    return {};
-  }
+ private:
+  const ImageProcessor* image_processor_;
+  MMData& data_;
 };
 
 }  // namespace xllm

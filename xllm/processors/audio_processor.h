@@ -18,6 +18,7 @@ limitations under the License.
 #include <torch/torch.h>
 
 #include "core/common/macros.h"
+#include "core/framework/model/model_args.h"
 #include "core/framework/multimodal/mm_data.h"
 #include "core/framework/multimodal/mm_input.h"
 
@@ -35,6 +36,12 @@ class AudioProcessor {
     UNUSED_PARAMETER(output_item);
     return false;
   }
+};
+
+class AudioNoneProcessor final : public AudioProcessor {
+ public:
+  AudioNoneProcessor() = default;
+  explicit AudioNoneProcessor(const ModelArgs&) {}
 };
 
 }  // namespace xllm

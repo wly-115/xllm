@@ -41,6 +41,8 @@ class MiniCPMVImageProcessor final : public ImageProcessor {
   bool process(const std::vector<torch::Tensor>& images,
                std::vector<MMDataItem>& output_items) const override;
 
+  MMDict process_embedding(const EmbeddingOutput&) const override { return {}; }
+
  private:
   int32_t ensure_divide(int32_t length, int32_t patch_size) const {
     return std::max(

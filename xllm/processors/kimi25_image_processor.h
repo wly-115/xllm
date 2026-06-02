@@ -80,6 +80,8 @@ class KimiK25ImageProcessor final : public ImageProcessor {
   bool process(const std::vector<torch::Tensor>& images,
                std::vector<MMDataItem>& output_items) const override;
 
+  MMDict process_embedding(const EmbeddingOutput&) const override { return {}; }
+
  private:
   bool process_image(torch::Tensor image,
                      torch::Tensor& pixel_values,

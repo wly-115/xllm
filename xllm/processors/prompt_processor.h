@@ -47,7 +47,7 @@ class PromptProcessor {
     }
   }
   virtual void find_mm_spans(const std::vector<int32_t>& token_ids,
-                             MMData& mm_data) {};
+                             MMData& mm_data) = 0;
 };
 
 }  // namespace xllm

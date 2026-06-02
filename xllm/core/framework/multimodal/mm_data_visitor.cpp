@@ -190,6 +190,30 @@ bool EncoderOutputScatterVisitor::finish() const {
   return true;
 }
 
+bool PreprocessOutputScatterVisitor::visit(MMDataItem& item) {
+  if (item.is_embedded()) return true;
+
+  if (item.type() == MMType::IMAGE) {
+    item = std::move(image_items_[image_idx]);
+    ++image_idx;
+  } else if (item.type() == MMType::VIDEO) {
+    item = std::move(video_items_[video_idx]);
+    ++video_idx;
+  } else if (item.type() == MMType::AUDIO) {
+    item = std::move(audio_items_[audio_idx]);
+    ++audio_idx;
+  } else {
+    LOG(FATAL) << " mm data item type invalid, type is " << item.type();
+  }
+  return true;
+}
+
+bool PreprocessOutputScatterVisitor::finish() const {
+  return image_idx == static_cast<int32_t>(image_items_.size()) &&
+         video_idx == static_cast<int32_t>(video_items_.size()) &&
+         audio_idx == static_cast<int32_t>(audio_items_.size());
+}
+
 EncoderEmbeddingGatherVisitor::EncoderEmbeddingGatherVisitor(
     const torch::Device& device,
     uint32_t mm_type,

@@ -22,7 +22,6 @@ limitations under the License.
 #include "processors/multimodal_processor.h"
 #include "processors/qwen2_vl_image_processor.h"
 #include "processors/qwen2_vl_prompt_processor.h"
-#include "processors/qwen2_vl_video_processor.h"
 #include "processors/qwen3_vl_video_processor.h"
 
 #if defined(USE_NPU)
@@ -31,7 +30,7 @@ limitations under the License.
 #elif defined(USE_MLU)
 #include "core/layers/common/qwen3_next_rms_norm.h"
 #include "core/layers/common/rms_norm.h"
-#include "core/layers/mlu/qwen3_5_decoder_layer.h"
+#include "core/layers/qwen3_5_decoder_layer.h"
 #include "core/layers/qwen3_vision_layer.h"
 #include "models/llm/llm_model_base.h"
 #include "qwen3_vl.h"

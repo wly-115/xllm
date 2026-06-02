@@ -25,7 +25,7 @@ limitations under the License.
 #include "processors/qwen3_vl_input_processor.h"
 =======
 #include "processors/qwen2_vl_image_processor.h"
-#include "processors/qwen2_vl_video_processor.h"
+#include "processors/qwen3_vl_video_processor.h"
 #include "qwen2_5_vl.h"
 >>>>>>> a6abe048 (refactor: restructure multimodal processor pipeline.)
 #include "qwen3_vl.h"
@@ -225,7 +225,7 @@ REGISTER_IMAGE_PROCESSOR(qwen3_vl_moe, Qwen3VLImageProcessor);
 using Qwen3VLMoeMultimodalProcessor =
     MultimodalProcessor<Qwen2VLPromptProcessor,
                         Qwen2VLImageProcessor,
-                        Qwen2VLVideoProcessor>;
+                        Qwen3VLVideoProcessor>;
 REGISTER_MULTIMODAL_PROCESSOR(qwen3_vl_moe, Qwen3VLMoeMultimodalProcessor);
 REGISTER_CAUSAL_VLM_MODEL(qwen3_vl_moe, Qwen3_VLMoeForConditionalGeneration);
 >>>>>>> a6abe048 (refactor: restructure multimodal processor pipeline.)

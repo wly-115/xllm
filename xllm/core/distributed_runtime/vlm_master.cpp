@@ -311,7 +311,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(std::string prompt,
   }
 
   PreprocessOutput output;
-  if (!multimodal_processor_->preprocess(prompt, std::move(mm_data), output)) {
+  if (!multimodal_processor_->process(prompt, std::move(mm_data), output)) {
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, output.error_message);
     return nullptr;
   }
@@ -328,8 +328,7 @@ std::shared_ptr<Request> VLMMaster::build_request(PreprocessOutput output,
     prompt_token_limit =
         std::min(prompt_token_limit, options_.max_tokens_per_batch());
   }
-  if (output.prompt_tokens.size() >=
-      static_cast<size_t>(prompt_token_limit)) {
+  if (output.prompt_tokens.size() >= static_cast<size_t>(prompt_token_limit)) {
     LOG(ERROR) << "Prompt is too long: " << output.prompt_tokens.size();
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, "Prompt is too long");
     return nullptr;
@@ -428,7 +427,7 @@ std::shared_ptr<Request> VLMMaster::generate_request(
     std::string payload,
     OutputCallback callback) {
   PreprocessOutput output;
-  if (!multimodal_processor_->preprocess(
+  if (!multimodal_processor_->process(
           messages, sp.tools, sp.chat_template_kwargs, payload, output)) {
     CALLBACK_WITH_ERROR(StatusCode::INVALID_ARGUMENT, output.error_message);
     return nullptr;

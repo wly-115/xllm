@@ -32,6 +32,8 @@ class Glm4VImageProcessor final : public ImageProcessor {
   bool process(const std::vector<torch::Tensor>& images,
                std::vector<MMDataItem>& output_items) const override;
 
+  MMDict process_embedding(const EmbeddingOutput&) const override { return {}; }
+
  private:
   bool do_convert_rgb_ = true;
   bool do_normalize_ = true;

@@ -12,6 +12,7 @@ cc_library(
     mm_embedding_handler.h
     mm_handler.h
     mm_input.h
+    mm_input_visitor.h
     mm_item_state.h
     mm_type.h
   SRCS
@@ -23,6 +24,7 @@ cc_library(
     mm_embedding_handler.cpp
     mm_handler.cpp
     mm_input.cpp
+    mm_input_visitor.cpp
     mm_type.cpp
   DEPS
     common
