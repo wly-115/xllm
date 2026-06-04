@@ -88,28 +88,43 @@ constexpr char kQwenImageEditConfig[] = R"json(
 
 GraphConfig load_config_or_die(const std::string& json_text) {
   GraphConfig config;
-  EXPECT_TRUE(load_graph_config_from_json(json_text, config));
+  load_graph_config_from_json(json_text, config);
   return config;
 }
 
-bool load_config(const std::string& json_text) {
-  GraphConfig config;
-  return load_graph_config_from_json(json_text, config);
+void expect_load_config_fatal(const std::string& json_text) {
+  EXPECT_DEATH(
+      {
+        GraphConfig config;
+        load_graph_config_from_json(json_text, config);
+      },
+      "");
 }
 
-bool validate_config_from_json(const std::string& json_text) {
-  GraphConfig config;
-  if (!load_graph_config_from_json(json_text, config)) {
-    return false;
-  }
-  return validate_graph_config(config);
+void expect_validate_config_from_json_fatal(const std::string& json_text) {
+  EXPECT_DEATH(
+      {
+        GraphConfig config;
+        load_graph_config_from_json(json_text, config);
+        validate_graph_config(config);
+      },
+      "");
+}
+
+void expect_validate_config_fatal(const GraphConfig& config) {
+  EXPECT_DEATH(
+      {
+        GraphConfig copied_config = config;
+        validate_graph_config(copied_config);
+      },
+      "");
 }
 
 TEST(GraphConfigLoadTest, LoadQwenImageEditConfig) {
   GraphConfig config = load_config_or_die(kQwenImageEditConfig);
   EXPECT_EQ(config.graph_name, "qwen_image_edit");
   ASSERT_EQ(config.nodes.size(), 2);
-  EXPECT_TRUE(validate_graph_config(config));
+  validate_graph_config(config);
 
   const NodeConfig& vlm_node = config.nodes[0];
   EXPECT_EQ(vlm_node.name, "node0");
@@ -156,9 +171,7 @@ TEST(GraphConfigLoadTest, RejectsDuplicateRankInNode) {
   ]
 }
 )json";
-  bool validate_status = load_config(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsDuplicateNodeName) {
@@ -193,9 +206,7 @@ TEST(GraphConfigValidateTest, RejectsDuplicateNodeName) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsRankBelongingToMultipleNodes) {
@@ -214,9 +225,7 @@ TEST(GraphConfigValidateTest, RejectsRankBelongingToMultipleNodes) {
   node1.output_keys = {"text"};
   config.nodes.emplace_back(node1);
 
-  bool validate_status = validate_graph_config(config);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigValidateTest, RejectsInvalidLocalRankMapping) {
@@ -230,9 +239,7 @@ TEST(GraphConfigValidateTest, RejectsInvalidLocalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  bool validate_status = validate_graph_config(config);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigValidateTest, RejectsNegativeGlobalRankMapping) {
@@ -246,9 +253,7 @@ TEST(GraphConfigValidateTest, RejectsNegativeGlobalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  bool validate_status = validate_graph_config(config);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigValidateTest, RejectsDuplicateLocalRankMapping) {
@@ -262,9 +267,7 @@ TEST(GraphConfigValidateTest, RejectsDuplicateLocalRankMapping) {
   node.output_keys = {"text"};
   config.nodes.emplace_back(node);
 
-  bool validate_status = validate_graph_config(config);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigValidateTest, RejectsNodeWithEmptyRanks) {
@@ -288,9 +291,7 @@ TEST(GraphConfigValidateTest, RejectsNodeWithEmptyRanks) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsUnknownDependency) {
@@ -315,9 +316,7 @@ TEST(GraphConfigValidateTest, RejectsUnknownDependency) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsMissingFinalOutput) {
@@ -339,9 +338,7 @@ TEST(GraphConfigValidateTest, RejectsMissingFinalOutput) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsEmptyFinalOutputKeys) {
@@ -365,9 +362,7 @@ TEST(GraphConfigValidateTest, RejectsEmptyFinalOutputKeys) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsFinalOutputWithDownstreamNode) {
@@ -403,9 +398,7 @@ TEST(GraphConfigValidateTest, RejectsFinalOutputWithDownstreamNode) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigLoadTest, RejectsRankOutsideInt32Range) {
@@ -429,9 +422,7 @@ TEST(GraphConfigLoadTest, RejectsRankOutsideInt32Range) {
   ]
 }
 )json";
-  bool status = load_config(kConfig);
-
-  EXPECT_FALSE(status);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeRank) {
@@ -455,9 +446,7 @@ TEST(GraphConfigLoadTest, RejectsNegativeRank) {
   ]
 }
 )json";
-  bool status = load_config(kConfig);
-
-  EXPECT_FALSE(status);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeReadyTimeout) {
@@ -482,9 +471,7 @@ TEST(GraphConfigLoadTest, RejectsNegativeReadyTimeout) {
   ]
 }
 )json";
-  bool status = load_config(kConfig);
-
-  EXPECT_FALSE(status);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigLoadTest, RejectsNegativeNodeTimeout) {
@@ -509,9 +496,7 @@ TEST(GraphConfigLoadTest, RejectsNegativeNodeTimeout) {
   ]
 }
 )json";
-  bool status = load_config(kConfig);
-
-  EXPECT_FALSE(status);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigValidateTest, RejectsCyclicGraph) {
@@ -559,9 +544,7 @@ TEST(GraphConfigValidateTest, RejectsCyclicGraph) {
   ]
 }
 )json";
-  bool validate_status = validate_config_from_json(kConfig);
-
-  EXPECT_FALSE(validate_status);
+  expect_validate_config_from_json_fatal(kConfig);
 }
 
 TEST(GraphConfigTest, BuildsReadyKey) {

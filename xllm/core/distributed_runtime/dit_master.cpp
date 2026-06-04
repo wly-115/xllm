@@ -89,8 +89,7 @@ void DiTMaster::handle_request(DiTRequestParams params,
                                                 params.x_request_time,
                                                 std::move(dit_state));
 
-    auto* dit_engine = static_cast<DiTEngine*>(engine_.get());
-    if (!dit_engine->add_request(request)) {
+    if (!engine_->add_request(request)) {
       CALLBACK_WITH_ERROR(StatusCode::RESOURCE_EXHAUSTED,
                           "No available resources to schedule request");
     }

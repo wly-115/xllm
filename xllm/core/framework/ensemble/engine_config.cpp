@@ -20,7 +20,6 @@ limitations under the License.
 
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -33,54 +32,23 @@ namespace xllm {
 namespace ensemble {
 namespace {
 
-bool log_invalid_argument(const std::string& message) {
-  LOG(ERROR) << message;
-  return false;
-}
-
-void restore_flags(
-    const std::vector<std::pair<std::string, std::string>>& values) {
-  for (const auto& [name, value] : values) {
-    google::SetCommandLineOption(name.c_str(), value.c_str());
-  }
-}
-
-bool apply_engine_config(
+void apply_engine_config(
     const std::unordered_map<std::string, std::string>& engine_config) {
-  std::vector<std::pair<std::string, std::string>> previous_values;
-  previous_values.reserve(engine_config.size());
-  for (const auto& [name, value] : engine_config) {
-    google::CommandLineFlagInfo flag_info;
-    if (!google::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
-      return log_invalid_argument("Unknown engine_config field: " + name);
-    }
-    previous_values.emplace_back(name, flag_info.current_value);
-  }
-
   for (const auto& [name, value] : engine_config) {
     const std::string applied_value =
         google::SetCommandLineOption(name.c_str(), value.c_str());
-    if (applied_value.empty()) {
-      restore_flags(previous_values);
-      return log_invalid_argument(
-          "Failed to apply engine_config field: " + name + "=" + value);
-    }
   }
-  return true;
 }
 
-bool find_node_config(const GraphConfig& config,
-                      int32_t global_rank,
-                      NodeConfig& node) {
+const NodeConfig& find_node_config(const GraphConfig& config,
+                                   int32_t global_rank) {
   for (const NodeConfig& candidate : config.nodes) {
     if (candidate.ranks.find(global_rank) != candidate.ranks.end()) {
-      node = candidate;
-      return true;
+      return candidate;
     }
   }
-  return log_invalid_argument(
-      "graph global rank does not belong to any node: " +
-      std::to_string(global_rank));
+  LOG(FATAL) << "graph global rank does not belong to any node: "
+             << global_rank;
 }
 
 Options build_options(int32_t local_rank, int32_t world_size) {
@@ -194,9 +162,10 @@ Options build_options(int32_t local_rank, int32_t world_size) {
   return options;
 }
 
-runtime::Options build_runtime_options(const Options& options,
-                                       int32_t local_rank,
-                                       int32_t world_size) {
+runtime::Options build_runtime_options(const Options& options) {
+  const int32_t local_rank = options.node_rank();
+  const int32_t world_size = options.nnodes();
+
   runtime::Options runtime_options;
 #if defined(USE_NPU)
   runtime_options.npu_kernel_backend(options.npu_kernel_backend());
@@ -280,23 +249,23 @@ runtime::Options build_runtime_options(const Options& options,
 
 }  // namespace
 
-bool initialize_engine_options_from_config(const GraphConfig& config,
-                                           int32_t global_rank,
-                                           runtime::Options& runtime_options) {
-  NodeConfig node;
-  if (!find_node_config(config, global_rank, node)) {
-    return false;
-  }
+NodeLaunchConfig resolve_node_launch_config(const GraphConfig& config,
+                                            int32_t global_rank) {
+  const NodeConfig& node = find_node_config(config, global_rank);
+  apply_engine_config(node.engine_config);
 
   const int32_t local_rank = node.ranks.at(global_rank);
   const int32_t world_size = static_cast<int32_t>(node.ranks.size());
-  if (!apply_engine_config(node.engine_config)) {
-    return false;
-  }
-
   Options options = build_options(local_rank, world_size);
-  runtime_options = build_runtime_options(options, local_rank, world_size);
-  return true;
+  NodeLaunchConfig launch_config;
+  launch_config.node_name = node.name;
+  launch_config.service_target = node.endpoint.target;
+  launch_config.runtime_options = build_runtime_options(options);
+  launch_config.graph_global_rank = global_rank;
+  launch_config.local_rank = local_rank;
+  launch_config.world_size = world_size;
+  launch_config.is_leader = node.ranks.begin()->first == global_rank;
+  return launch_config;
 }
 
 }  // namespace ensemble

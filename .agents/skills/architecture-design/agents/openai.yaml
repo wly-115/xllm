@@ -1,7 +1,0 @@
-interface:
-  display_name: "Architecture Design"
-  short_description: "Design scoped technical plans and architecture"
-  default_prompt: "Use $architecture-design to draft or review this technical design with clear scope, boundaries, tradeoffs, risks, and validation."
-
-policy:
-  allow_implicit_invocation: true

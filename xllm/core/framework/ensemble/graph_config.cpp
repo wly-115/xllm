@@ -32,21 +32,16 @@ namespace xllm {
 namespace ensemble {
 namespace {
 
-bool log_invalid_argument(const std::string& message) {
-  LOG(ERROR) << message;
-  return false;
-}
-
-bool parse_string_map(const nlohmann::json& root,
-                      const std::string& field_name,
-                      std::unordered_map<std::string, std::string>& output) {
-  output.clear();
+std::unordered_map<std::string, std::string> parse_string_map(
+    const nlohmann::json& root,
+    const std::string& field_name) {
+  std::unordered_map<std::string, std::string> output;
   if (!root.contains(field_name)) {
-    return true;
+    return output;
   }
   const nlohmann::json& value = root.at(field_name);
   if (!value.is_object()) {
-    return log_invalid_argument(field_name + " must be an object.");
+    LOG(FATAL) << field_name << " must be an object.";
   }
   for (auto it = value.begin(); it != value.end(); ++it) {
     const nlohmann::json& item = it.value();
@@ -58,211 +53,202 @@ bool parse_string_map(const nlohmann::json& root,
       output.emplace(it.key(), item.dump());
       continue;
     }
-    return log_invalid_argument(field_name + "." + it.key() +
-                                " must be a scalar value.");
+    LOG(FATAL) << field_name << "." << it.key() << " must be a scalar value.";
   }
-  return true;
+  return output;
 }
 
-bool parse_node(const nlohmann::json& node_json, NodeConfig& node) {
-  if (!node_json.is_object()) {
-    return log_invalid_argument("nodes item must be an object.");
+std::vector<std::string> parse_string_array(const nlohmann::json& root,
+                                            const std::string& field_name) {
+  std::vector<std::string> output;
+  if (!root.contains(field_name)) {
+    return output;
   }
-  if (!node_json.contains("name") || !node_json.at("name").is_string()) {
-    return log_invalid_argument("node.name must be a string.");
+  const nlohmann::json& value = root.at(field_name);
+  if (!value.is_array()) {
+    LOG(FATAL) << field_name << " must be a string array.";
   }
-  if (!node_json.contains("node_type") ||
-      !node_json.at("node_type").is_string()) {
-    return log_invalid_argument("node.node_type must be a string.");
-  }
-  node.name = node_json.at("name").get<std::string>();
-  node.node_type = node_json.at("node_type").get<std::string>();
-  if (node_json.contains("deps")) {
-    if (!node_json.at("deps").is_array()) {
-      return log_invalid_argument("node.deps must be a string array.");
+  output.reserve(value.size());
+  for (const nlohmann::json& item : value) {
+    if (!item.is_string()) {
+      LOG(FATAL) << field_name << " must be a string array.";
     }
-    for (const nlohmann::json& dep : node_json.at("deps")) {
-      if (!dep.is_string()) {
-        return log_invalid_argument("node.deps must be a string array.");
-      }
-      node.deps.emplace_back(dep.get<std::string>());
+    output.emplace_back(item.get<std::string>());
+  }
+  return output;
+}
+
+std::map<int32_t, int32_t> parse_ranks(const nlohmann::json& node_json) {
+  std::map<int32_t, int32_t> ranks;
+  if (!node_json.contains("ranks")) {
+    return ranks;
+  }
+  if (!node_json.at("ranks").is_array()) {
+    LOG(FATAL) << "node.ranks must be an integer array.";
+  }
+  const nlohmann::json& ranks_json = node_json.at("ranks");
+  std::vector<int32_t> global_ranks;
+  global_ranks.reserve(ranks_json.size());
+  for (const nlohmann::json& item : ranks_json) {
+    if (!item.is_number_integer()) {
+      LOG(FATAL) << "node.ranks must be an integer array.";
     }
-  }
-  node.ranks.clear();
-  if (node_json.contains("ranks")) {
-    if (!node_json.at("ranks").is_array()) {
-      return log_invalid_argument("node.ranks must be an integer array.");
+    int64_t rank = item.get<int64_t>();
+    if (rank < 0 || rank > std::numeric_limits<int32_t>::max()) {
+      LOG(FATAL) << "node.ranks contains invalid rank.";
     }
-    const nlohmann::json& ranks_json = node_json.at("ranks");
-    std::vector<int32_t> global_ranks;
-    global_ranks.reserve(ranks_json.size());
-    for (const nlohmann::json& item : ranks_json) {
-      if (!item.is_number_integer()) {
-        return log_invalid_argument("node.ranks must be an integer array.");
-      }
-      int64_t rank = item.get<int64_t>();
-      if (rank < 0 || rank > std::numeric_limits<int32_t>::max()) {
-        return log_invalid_argument("node.ranks contains invalid rank.");
-      }
-      global_ranks.emplace_back(static_cast<int32_t>(rank));
+    global_ranks.emplace_back(static_cast<int32_t>(rank));
+  }
+  std::sort(global_ranks.begin(), global_ranks.end());
+  for (std::size_t index = 0; index < global_ranks.size(); ++index) {
+    const int32_t global_rank = global_ranks[index];
+    if (index > 0 && global_rank == global_ranks[index - 1]) {
+      LOG(FATAL) << "node.ranks contains duplicate rank.";
     }
-    std::sort(global_ranks.begin(), global_ranks.end());
-    for (std::size_t index = 0; index < global_ranks.size(); ++index) {
-      const int32_t global_rank = global_ranks[index];
-      if (index > 0 && global_rank == global_ranks[index - 1]) {
-        return log_invalid_argument("node.ranks contains duplicate rank.");
-      }
-      node.ranks.emplace(global_rank, static_cast<int32_t>(index));
-    }
+    ranks.emplace(global_rank, static_cast<int32_t>(index));
   }
-  if (!parse_string_map(node_json, "engine_config", node.engine_config)) {
-    return false;
-  }
-  if (!node_json.contains("request_adapter") ||
-      !node_json.at("request_adapter").is_string()) {
-    return log_invalid_argument("node.request_adapter must be a string.");
-  }
-  node.request_adapter = node_json.at("request_adapter").get<std::string>();
-  if (!parse_string_map(
-          node_json, "request_adapter_config", node.request_adapter_config)) {
-    return false;
-  }
-  if (!node_json.contains("result_adapter") ||
-      !node_json.at("result_adapter").is_string()) {
-    return log_invalid_argument("node.result_adapter must be a string.");
-  }
-  node.result_adapter = node_json.at("result_adapter").get<std::string>();
-  if (!parse_string_map(
-          node_json, "result_adapter_config", node.result_adapter_config)) {
-    return false;
-  }
+  return ranks;
+}
+
+EndpointConfig parse_endpoint_config(const nlohmann::json& node_json) {
   if (!node_json.contains("endpoint")) {
-    return log_invalid_argument("endpoint is required.");
+    LOG(FATAL) << "endpoint is required.";
   }
   const nlohmann::json& endpoint_json = node_json.at("endpoint");
   if (!endpoint_json.is_object()) {
-    return log_invalid_argument("endpoint must be an object.");
+    LOG(FATAL) << "endpoint must be an object.";
   }
   if (!endpoint_json.contains("transport") ||
       !endpoint_json.at("transport").is_string()) {
-    return log_invalid_argument("endpoint.transport must be a string.");
+    LOG(FATAL) << "endpoint.transport must be a string.";
   }
   if (!endpoint_json.contains("target") ||
       !endpoint_json.at("target").is_string()) {
-    return log_invalid_argument("endpoint.target must be a string.");
+    LOG(FATAL) << "endpoint.target must be a string.";
   }
-  node.endpoint.transport = endpoint_json.at("transport").get<std::string>();
-  node.endpoint.target = endpoint_json.at("target").get<std::string>();
-  if (!parse_string_map(endpoint_json, "args", node.endpoint.args)) {
-    return false;
+
+  EndpointConfig endpoint;
+  endpoint.transport = endpoint_json.at("transport").get<std::string>();
+  endpoint.target = endpoint_json.at("target").get<std::string>();
+  endpoint.args = parse_string_map(endpoint_json, "args");
+  return endpoint;
+}
+
+NodeConfig parse_node(const nlohmann::json& node_json) {
+  if (!node_json.is_object()) {
+    LOG(FATAL) << "nodes item must be an object.";
   }
+  if (!node_json.contains("name") || !node_json.at("name").is_string()) {
+    LOG(FATAL) << "node.name must be a string.";
+  }
+  if (!node_json.contains("node_type") ||
+      !node_json.at("node_type").is_string()) {
+    LOG(FATAL) << "node.node_type must be a string.";
+  }
+
+  NodeConfig node;
+  node.name = node_json.at("name").get<std::string>();
+  node.node_type = node_json.at("node_type").get<std::string>();
+  node.deps = parse_string_array(node_json, "node.deps");
+  node.ranks = parse_ranks(node_json);
+  node.engine_config = parse_string_map(node_json, "engine_config");
+  if (!node_json.contains("request_adapter") ||
+      !node_json.at("request_adapter").is_string()) {
+    LOG(FATAL) << "node.request_adapter must be a string.";
+  }
+  node.request_adapter = node_json.at("request_adapter").get<std::string>();
+  node.request_adapter_config =
+      parse_string_map(node_json, "request_adapter_config");
+  if (!node_json.contains("result_adapter") ||
+      !node_json.at("result_adapter").is_string()) {
+    LOG(FATAL) << "node.result_adapter must be a string.";
+  }
+  node.result_adapter = node_json.at("result_adapter").get<std::string>();
+  node.result_adapter_config =
+      parse_string_map(node_json, "result_adapter_config");
+  node.endpoint = parse_endpoint_config(node_json);
   if (node_json.contains("final_output")) {
     if (!node_json.at("final_output").is_boolean()) {
-      return log_invalid_argument("node.final_output must be a bool.");
+      LOG(FATAL) << "node.final_output must be a bool.";
     }
     node.final_output = node_json.at("final_output").get<bool>();
   }
-  if (node_json.contains("output_keys")) {
-    if (!node_json.at("output_keys").is_array()) {
-      return log_invalid_argument("node.output_keys must be a string array.");
-    }
-    for (const nlohmann::json& output_key : node_json.at("output_keys")) {
-      if (!output_key.is_string()) {
-        return log_invalid_argument("node.output_keys must be a string array.");
-      }
-      node.output_keys.emplace_back(output_key.get<std::string>());
-    }
-  }
+  node.output_keys = parse_string_array(node_json, "node.output_keys");
   if (node_json.contains("timeout_ms")) {
     if (!node_json.at("timeout_ms").is_number_integer()) {
-      return log_invalid_argument("node.timeout_ms must be an integer.");
+      LOG(FATAL) << "node.timeout_ms must be an integer.";
     }
     node.timeout_ms = node_json.at("timeout_ms").get<int64_t>();
     if (node.timeout_ms < 0) {
-      return log_invalid_argument("node.timeout_ms must be non-negative.");
+      LOG(FATAL) << "node.timeout_ms must be non-negative.";
     }
   }
-  return true;
+  return node;
 }
 
 }  // namespace
 
-bool validate_graph_config(const GraphConfig& config) {
+void validate_graph_config(const GraphConfig& config) {
   std::unordered_set<std::string> node_names;
   std::unordered_set<int32_t> global_ranks;
   bool has_final_output = false;
-  std::unordered_set<std::string> upstream_nodes;
   std::unordered_map<std::string, int32_t> indegrees;
   std::unordered_map<std::string, std::vector<std::string>> downstream_nodes;
 
   for (const NodeConfig& node : config.nodes) {
     if (node.name.empty()) {
-      return log_invalid_argument("node name cannot be empty.");
+      LOG(FATAL) << "node name cannot be empty.";
     }
     if (!node_names.insert(node.name).second) {
-      return log_invalid_argument("Duplicate node name: " + node.name);
+      LOG(FATAL) << "Duplicate node name: " << node.name;
     }
     if (node.ranks.empty()) {
-      return log_invalid_argument("node ranks cannot be empty: " + node.name);
+      LOG(FATAL) << "node ranks cannot be empty: " << node.name;
     }
-    std::unordered_set<int32_t> local_ranks;
     int32_t expected_local_rank = 0;
     for (const auto& rank : node.ranks) {
       const int32_t global_rank = rank.first;
       const int32_t local_rank = rank.second;
       if (global_rank < 0) {
-        return log_invalid_argument("Global rank is out of range in node: " +
-                                    node.name);
+        LOG(FATAL) << "Global rank is out of range in node: " << node.name;
       }
       if (local_rank < 0 ||
           local_rank >= static_cast<int32_t>(node.ranks.size())) {
-        return log_invalid_argument("Local rank is out of range in node: " +
-                                    node.name);
-      }
-      if (!local_ranks.insert(local_rank).second) {
-        return log_invalid_argument("Duplicate local rank in node: " +
-                                    node.name);
+        LOG(FATAL) << "Local rank is out of range in node: " << node.name;
       }
       if (!global_ranks.insert(global_rank).second) {
-        return log_invalid_argument("Rank belongs to multiple nodes: " +
-                                    std::to_string(global_rank));
+        LOG(FATAL) << "Rank belongs to multiple nodes: " << global_rank;
       }
       if (local_rank != expected_local_rank) {
-        return log_invalid_argument("Local rank mapping is invalid in node: " +
-                                    node.name);
+        LOG(FATAL) << "Local rank mapping is invalid in node: " << node.name;
       }
       ++expected_local_rank;
     }
     if (node.final_output) {
       has_final_output = true;
       if (node.output_keys.empty()) {
-        return log_invalid_argument(
-            "final output node output_keys cannot be "
-            "empty: " +
-            node.name);
+        LOG(FATAL) << "final output node output_keys cannot be empty: "
+                   << node.name;
       }
-    }
-    for (const std::string& dep : node.deps) {
-      upstream_nodes.insert(dep);
     }
     indegrees.emplace(node.name, 0);
   }
 
   if (!has_final_output) {
-    return log_invalid_argument("At least one final_output node is required.");
+    LOG(FATAL) << "At least one final_output node is required.";
   }
   for (const NodeConfig& node : config.nodes) {
     for (const std::string& dep : node.deps) {
       if (node_names.find(dep) == node_names.end()) {
-        return log_invalid_argument("deps references unknown node: " + dep);
+        LOG(FATAL) << "deps references unknown node: " << dep;
       }
       downstream_nodes[dep].emplace_back(node.name);
       ++indegrees[node.name];
     }
     if (node.final_output &&
-        upstream_nodes.find(node.name) != upstream_nodes.end()) {
-      return log_invalid_argument(
-          "final output node cannot have downstream node: " + node.name);
+        downstream_nodes.find(node.name) != downstream_nodes.end()) {
+      LOG(FATAL) << "final output node cannot have downstream node: "
+                 << node.name;
     }
   }
   std::deque<std::string> ready_nodes;
@@ -289,64 +275,57 @@ bool validate_graph_config(const GraphConfig& config) {
     }
   }
   if (visited_count != static_cast<int32_t>(config.nodes.size())) {
-    return log_invalid_argument("graph must be a DAG.");
+    LOG(FATAL) << "graph must be a DAG.";
   }
-  return true;
 }
 
-bool load_graph_config_from_file(const std::string& path, GraphConfig& config) {
+void load_graph_config_from_file(const std::string& path, GraphConfig& config) {
   std::ifstream file(path);
   if (!file.is_open()) {
-    return log_invalid_argument("Failed to open graph config: " + path);
+    LOG(FATAL) << "Failed to open graph config: " << path;
   }
   std::stringstream buffer;
   buffer << file.rdbuf();
-  return load_graph_config_from_json(buffer.str(), config);
+  load_graph_config_from_json(buffer.str(), config);
 }
 
-bool load_graph_config_from_json(const std::string& json_text,
+void load_graph_config_from_json(const std::string& json_text,
                                  GraphConfig& config) {
   GraphConfig parsed_config;
   try {
     nlohmann::json root = nlohmann::json::parse(json_text);
     if (!root.is_object()) {
-      return log_invalid_argument("graph config must be an object.");
+      LOG(FATAL) << "graph config must be an object.";
     }
     if (!root.contains("graph_name") || !root.at("graph_name").is_string()) {
-      return log_invalid_argument("graph_name must be a string.");
+      LOG(FATAL) << "graph_name must be a string.";
     }
     parsed_config.graph_name = root.at("graph_name").get<std::string>();
     if (root.contains("ready_timeout_ms")) {
       if (!root.at("ready_timeout_ms").is_number_integer()) {
-        return log_invalid_argument("ready_timeout_ms must be an integer.");
+        LOG(FATAL) << "ready_timeout_ms must be an integer.";
       }
       parsed_config.ready_timeout_ms =
           root.at("ready_timeout_ms").get<int64_t>();
       if (parsed_config.ready_timeout_ms < 0) {
-        return log_invalid_argument("ready_timeout_ms must be non-negative.");
+        LOG(FATAL) << "ready_timeout_ms must be non-negative.";
       }
     }
     if (!root.contains("nodes")) {
-      return log_invalid_argument("nodes is required.");
+      LOG(FATAL) << "nodes is required.";
     }
     if (!root.at("nodes").is_array()) {
-      return log_invalid_argument("nodes must be an array.");
+      LOG(FATAL) << "nodes must be an array.";
     }
     const nlohmann::json& nodes_json = root.at("nodes");
     parsed_config.nodes.reserve(nodes_json.size());
     for (const nlohmann::json& node_json : nodes_json) {
-      NodeConfig node;
-      if (!parse_node(node_json, node)) {
-        return false;
-      }
-      parsed_config.nodes.emplace_back(std::move(node));
+      parsed_config.nodes.emplace_back(parse_node(node_json));
     }
   } catch (const nlohmann::json::exception& e) {
-    return log_invalid_argument(std::string("Failed to parse graph config: ") +
-                                e.what());
+    LOG(FATAL) << "Failed to parse graph config: " << e.what();
   }
   config = std::move(parsed_config);
-  return true;
 }
 
 std::string make_ready_key(const std::string& graph_name,

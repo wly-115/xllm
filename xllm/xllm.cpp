@@ -112,45 +112,37 @@ void wait_for_shutdown_signal() {
 
 bool is_omni_mode_enabled() { return !FLAGS_omni_graph_config_path.empty(); }
 
-bool load_omni_graph_config(ensemble::GraphConfig& graph_config) {
+void load_omni_graph_config(ensemble::GraphConfig& graph_config) {
   if (FLAGS_omni_graph_config_path.empty()) {
-    LOG(ERROR) << "omni_graph_config_path cannot be empty.";
-    return false;
+    LOG(FATAL) << "omni_graph_config_path cannot be empty.";
   }
-  if (!ensemble::load_graph_config_from_file(FLAGS_omni_graph_config_path,
-                                             graph_config)) {
-    return false;
-  }
-  return ensemble::validate_graph_config(graph_config);
+  ensemble::load_graph_config_from_file(FLAGS_omni_graph_config_path,
+                                        graph_config);
+  ensemble::validate_graph_config(graph_config);
 }
 
 int run_omni() {
   ensemble::GraphConfig graph_config;
-  if (!load_omni_graph_config(graph_config)) {
-    LOG(ERROR) << "Failed to load omni graph config from "
-               << FLAGS_omni_graph_config_path;
-    return -1;
-  }
+  load_omni_graph_config(graph_config);
+  const ensemble::NodeLaunchConfig launch_config =
+      ensemble::resolve_node_launch_config(
+          /*config=*/graph_config, /*graph_global_rank=*/FLAGS_node_rank);
+  EngineServer engine_server;
 
   std::unique_ptr<OmniMaster> omni_master;
   if (FLAGS_node_rank == 0) {
     omni_master = std::make_unique<OmniMaster>();
-    if (!omni_master->prepare(graph_config)) {
-      LOG(ERROR) << "Failed to prepare OmniMaster.";
+    if (!omni_master->start(graph_config)) {
+      LOG(ERROR) << "Failed to start OmniMaster.";
       return -1;
     }
   }
 
-  EngineServer engine_server;
-  if (!engine_server.init(graph_config, FLAGS_node_rank)) {
-    LOG(ERROR) << "Failed to initialize EngineServer for node_rank="
-               << FLAGS_node_rank;
-    return -1;
-  }
+  engine_server.init(launch_config);
 
   if (omni_master != nullptr) {
-    if (!omni_master->finish_init()) {
-      LOG(ERROR) << "Failed to finish OmniMaster initialization for node_rank="
+    if (!omni_master->wait()) {
+      LOG(ERROR) << "Failed to wait OmniMaster for node_rank="
                  << FLAGS_node_rank;
       return -1;
     }

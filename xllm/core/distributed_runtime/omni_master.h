@@ -35,15 +35,16 @@ class OmniMaster final {
   OmniMaster() = default;
   ~OmniMaster();
 
-  bool prepare(const ensemble::GraphConfig& graph_config);
-  bool finish_init();
+  bool start(const ensemble::GraphConfig& graph_config);
+  bool wait();
 
  private:
-  bool start_ready_service();
-  bool wait_engine_services_ready();
+  bool start_service();
+  bool wait_ready();
   void stop_ready_service();
 
-  ensemble::GraphConfig graph_config_;
+  std::shared_ptr<const ensemble::Graph> graph_;
+  int64_t ready_timeout_ms_ = 0;
   std::shared_ptr<EnsembleNodeReadyService> ready_service_;
   std::shared_ptr<EnsembleEngine> ensemble_engine_;
   std::string ready_server_name_;

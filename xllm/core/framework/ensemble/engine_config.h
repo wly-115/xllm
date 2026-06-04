@@ -23,9 +23,18 @@ limitations under the License.
 namespace xllm {
 namespace ensemble {
 
-bool initialize_engine_options_from_config(const GraphConfig& config,
-                                           int32_t graph_global_rank,
-                                           runtime::Options& runtime_options);
+struct NodeLaunchConfig {
+  std::string node_name;
+  std::string service_target;
+  runtime::Options runtime_options;
+  int32_t graph_global_rank = 0;
+  int32_t local_rank = 0;
+  int32_t world_size = 1;
+  bool is_leader = false;
+};
+
+NodeLaunchConfig resolve_node_launch_config(const GraphConfig& config,
+                                            int32_t graph_global_rank);
 
 }  // namespace ensemble
 }  // namespace xllm

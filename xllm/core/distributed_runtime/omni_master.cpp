@@ -20,7 +20,7 @@ limitations under the License.
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 #include "core/common/global_flags.h"
 #include "core/distributed_runtime/ensemble_engine.h"
@@ -33,25 +33,19 @@ namespace xllm {
 
 OmniMaster::~OmniMaster() { stop_ready_service(); }
 
-bool OmniMaster::prepare(const ensemble::GraphConfig& graph_config) {
-  graph_config_ = graph_config;
-  const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
+bool OmniMaster::start(const ensemble::GraphConfig& graph_config) {
+  graph_ = std::make_shared<const ensemble::Graph>(
+      ensemble::build_graph_from_config(graph_config));
+  ensemble_engine_ = std::make_shared<EnsembleEngine>(graph_);
+  ready_timeout_ms_ = graph_config.ready_timeout_ms;
+  const int32_t total_num = static_cast<int32_t>(graph_->nodes().size());
   ready_service_ = std::make_shared<EnsembleNodeReadyService>(total_num);
-  return start_ready_service();
+  return start_service();
 }
 
-bool OmniMaster::finish_init() {
-  if (!wait_engine_services_ready()) {
-    return false;
-  }
+bool OmniMaster::wait() { return wait_ready(); }
 
-  ensemble_engine_ =
-      std::make_shared<EnsembleEngine>(std::make_shared<const ensemble::Graph>(
-          ensemble::build_graph_from_config(graph_config_)));
-  return true;
-}
-
-bool OmniMaster::start_ready_service() {
+bool OmniMaster::start_service() {
   if (FLAGS_omni_master_addr.empty()) {
     LOG(ERROR) << "omni_master_addr cannot be empty.";
     return false;
@@ -79,33 +73,16 @@ bool OmniMaster::start_ready_service() {
   return true;
 }
 
-bool OmniMaster::wait_engine_services_ready() {
-  if (ready_service_ == nullptr) {
-    LOG(ERROR) << "ready_service must be initialized before waiting.";
-    return false;
-  }
-
-  std::unordered_map<std::string, std::string> ready_targets =
-      ready_service_->wait(graph_config_.ready_timeout_ms);
-  const int32_t total_num = static_cast<int32_t>(graph_config_.nodes.size());
-  if (static_cast<int32_t>(ready_targets.size()) != total_num) {
+bool OmniMaster::wait_ready() {
+  std::unordered_set<std::string> ready_nodes =
+      ready_service_->wait(ready_timeout_ms_);
+  const int32_t total_num = static_cast<int32_t>(graph_->nodes().size());
+  if (static_cast<int32_t>(ready_nodes.size()) != total_num) {
     LOG(ERROR) << "Not all engine services are ready. expected=" << total_num
-               << ", actual=" << ready_targets.size();
+               << ", actual=" << ready_nodes.size();
     stop_ready_service();
     return false;
   }
-
-  for (ensemble::NodeConfig& node : graph_config_.nodes) {
-    auto ready_it = ready_targets.find(node.name);
-    if (ready_it == ready_targets.end()) {
-      LOG(ERROR) << "Missing ready target for node: " << node.name;
-      stop_ready_service();
-      return false;
-    }
-    node.endpoint.target = ready_it->second;
-  }
-
-  stop_ready_service();
   return true;
 }
 
@@ -116,6 +93,7 @@ void OmniMaster::stop_ready_service() {
 
   ServerRegistry::get_instance().unregister_server(ready_server_name_);
   ready_server_name_.clear();
+  ready_service_.reset();
 }
 
 }  // namespace xllm

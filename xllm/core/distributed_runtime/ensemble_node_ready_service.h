@@ -18,7 +18,7 @@ limitations under the License.
 #include <cstdint>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <unordered_set>
 
 #include "common/macros.h"
 #include "worker.pb.h"
@@ -30,7 +30,7 @@ class EnsembleNodeReadyService final : public proto::EnsembleNodeReady {
   explicit EnsembleNodeReadyService(int32_t total_num);
   ~EnsembleNodeReadyService() override = default;
 
-  std::unordered_map<std::string, std::string> wait(int64_t timeout_ms);
+  std::unordered_set<std::string> wait(int64_t timeout_ms);
 
   void RegisterReady(::google::protobuf::RpcController* controller,
                      const proto::EnsembleNodeReadyRequest* request,
@@ -38,13 +38,13 @@ class EnsembleNodeReadyService final : public proto::EnsembleNodeReady {
                      ::google::protobuf::Closure* done) override;
 
  private:
-  bool register_ready(const std::string& node_name, const std::string& target);
+  bool register_ready(const std::string& node_name);
 
   DISALLOW_COPY_AND_ASSIGN(EnsembleNodeReadyService);
 
   int32_t total_num_ = 0;
   mutable std::mutex mutex_;
-  std::unordered_map<std::string, std::string> ready_targets_;
+  std::unordered_set<std::string> ready_nodes_;
 };
 
 }  // namespace xllm

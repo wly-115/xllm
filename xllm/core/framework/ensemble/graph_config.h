@@ -52,12 +52,12 @@ struct GraphConfig {
   std::vector<NodeConfig> nodes;
 };
 
-bool load_graph_config_from_file(const std::string& path, GraphConfig& config);
+void load_graph_config_from_file(const std::string& path, GraphConfig& config);
 
-bool load_graph_config_from_json(const std::string& json_text,
+void load_graph_config_from_json(const std::string& json_text,
                                  GraphConfig& config);
 
-bool validate_graph_config(const GraphConfig& config);
+void validate_graph_config(const GraphConfig& config);
 
 std::string make_ready_key(const std::string& graph_name,
                            const std::string& node_name);

@@ -36,39 +36,33 @@ constexpr const char* kEngineServiceServerPrefix = "EngineService:";
 
 }  // namespace
 
+EngineServer::EngineServer() = default;
+
 EngineServer::~EngineServer() { stop_service_endpoint(); }
 
-bool EngineServer::init(const ensemble::GraphConfig& graph_config,
-                        int32_t node_rank) {
-  for (const ensemble::NodeConfig& candidate : graph_config.nodes) {
-    if (candidate.ranks.find(node_rank) != candidate.ranks.end()) {
-      node_config_ = candidate;
-      break;
-    }
-  }
-  ensemble::initialize_engine_options_from_config(
-      graph_config, node_rank, options_);
-  CHECK(create_engine());
+void EngineServer::init(const ensemble::NodeLaunchConfig& launch_config) {
+  launch_config_ = launch_config;
+  engine_ = create_engine();
+  CHECK(engine_ != nullptr);
 
-  if (node_config_.ranks.begin()->first != node_rank) {
-    LOG(INFO) << "Initialized non-leader engine runtime for graph node "
-              << node_config_.name << ", node_rank=" << node_rank;
-    return true;
+  if (!launch_config_.is_leader) {
+    return;
   }
 
-  return start_leader_service(node_rank);
+  start_service();
 }
 
-void EngineServer::create_engine() {
-  const std::string backend = options_.backend();
+std::unique_ptr<Engine> EngineServer::create_engine() {
+  const runtime::Options& options = launch_config_.runtime_options;
+  const std::string backend = options.backend();
   if (backend == "vlm") {
-    engine_ = std::make_unique<VLMEngine>(options_);
-  } else if (backend == "dit") {
-    engine_ = std::make_unique<DiTEngine>(options_);
-  } else {
-    LOG(FATAL) << "Unsupported engine backend for graph node "
-               << node_config_.name << ": " << backend;
+    return std::make_unique<VLMEngine>(options);
   }
+  if (backend == "dit") {
+    return std::make_unique<DiTEngine>(options);
+  }
+  LOG(FATAL) << "Unsupported engine backend for graph node "
+             << launch_config_.node_name << ": " << backend;
 }
 
 bool EngineServer::exposes_service() const {
@@ -86,52 +80,33 @@ void EngineServer::run() {
   server->run();
 }
 
-bool EngineServer::start_leader_service(int32_t node_rank) {
+void EngineServer::start_service() {
+  CHECK(engine_ != nullptr);
   CHECK(engine_->init());
-
   service_ = std::make_unique<EngineService>(engine_.get());
-  LOG(INFO) << "Initialized EngineService skeleton for graph node "
-            << node_config_.name << ", node_rank=" << node_rank;
-  const std::string& target = node_config_.endpoint.target;
-  if (target.empty()) {
-    LOG(ERROR) << "EngineService endpoint target cannot be empty for node: "
-               << node_config_.name;
-    return false;
-  }
+  const std::string& target = launch_config_.service_target;
+  CHECK(!target.empty()) << "EngineService endpoint target cannot be empty "
+                         << "for node: " << launch_config_.node_name;
 
   const std::string server_name =
-      std::string(kEngineServiceServerPrefix) + node_config_.name;
+      std::string(kEngineServiceServerPrefix) + launch_config_.node_name;
   auto& registry = ServerRegistry::get_instance();
-  if (registry.try_get_server(server_name) != nullptr) {
-    LOG(ERROR) << "EngineService endpoint has already been registered: "
-               << server_name;
-    return false;
-  }
+  CHECK(registry.try_get_server(server_name) == nullptr)
+      << "EngineService endpoint has already been registered: " << server_name;
 
   XllmServer* server = registry.register_server(server_name);
   if (!server->start(service_.get(), target, server_name)) {
-    LOG(ERROR) << "Failed to start EngineService endpoint for graph node "
-               << node_config_.name << ", target=" << target;
     registry.unregister_server(server_name);
-    return false;
+    LOG(FATAL) << "Failed to start EngineService endpoint for graph node "
+               << launch_config_.node_name << ", target=" << target;
   }
 
   service_server_name_ = server_name;
-  LOG(INFO) << "Started EngineService endpoint for graph node "
-            << node_config_.name << ", target=" << target;
-  if (!register_ready()) {
-    stop_service_endpoint();
-    return false;
-  }
-  return true;
+  register_ready();
 }
 
-bool EngineServer::register_ready() {
-  if (FLAGS_omni_master_addr.empty()) {
-    LOG(ERROR) << "omni_master_addr cannot be empty.";
-    return false;
-  }
-  const std::string& target = node_config_.endpoint.target;
+void EngineServer::register_ready() {
+  CHECK(!FLAGS_omni_master_addr.empty()) << "omni_master_addr cannot be empty.";
 
   brpc::ChannelOptions options;
   options.connection_type = "single";
@@ -139,38 +114,25 @@ bool EngineServer::register_ready() {
   options.max_retry = kReadyRegisterMaxRetry;
 
   brpc::Channel channel;
-  if (channel.Init(FLAGS_omni_master_addr.c_str(),
-                   /*load_balancer=*/"",
-                   &options) != 0) {
-    LOG(ERROR) << "Failed to initialize ready registration channel to "
-               << FLAGS_omni_master_addr;
-    return false;
-  }
+  CHECK_EQ(channel.Init(FLAGS_omni_master_addr.c_str(),
+                        /*load_balancer=*/"",
+                        &options),
+           0)
+      << "Failed to initialize ready registration channel to "
+      << FLAGS_omni_master_addr;
 
   proto::EnsembleNodeReadyRequest request;
-  request.set_node_name(node_config_.name);
-  request.set_target(target);
+  request.set_node_name(launch_config_.node_name);
 
   proto::EnsembleNodeReadyResponse response;
   brpc::Controller controller;
   proto::EnsembleNodeReady_Stub stub(&channel);
   stub.RegisterReady(&controller, &request, &response, nullptr);
-  if (controller.Failed()) {
-    LOG(ERROR) << "Failed to register ready for graph node "
-               << node_config_.name << " to " << FLAGS_omni_master_addr << ": "
-               << controller.ErrorText();
-    return false;
-  }
-  if (!response.ok()) {
-    LOG(ERROR) << "Ready registration rejected for graph node "
-               << node_config_.name << ", target=" << target;
-    return false;
-  }
-
-  LOG(INFO) << "Registered ready for graph node " << node_config_.name
-            << ", target=" << target
-            << ", omni_master_addr=" << FLAGS_omni_master_addr;
-  return true;
+  CHECK(!controller.Failed())
+      << "Failed to register ready for graph node " << launch_config_.node_name
+      << " to " << FLAGS_omni_master_addr << ": " << controller.ErrorText();
+  CHECK(response.ok()) << "Ready registration rejected for graph node "
+                       << launch_config_.node_name;
 }
 
 void EngineServer::stop_service_endpoint() {

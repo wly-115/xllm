@@ -110,9 +110,7 @@ Graph::final_output_keys(const std::string& node_name) const {
 }
 
 Graph build_graph_from_config(const GraphConfig& config) {
-  if (!validate_graph_config(config)) {
-    LOG(FATAL) << "Invalid graph config.";
-  }
+  validate_graph_config(config);
 
   std::unordered_map<std::string, std::size_t> node_index;
   node_index.reserve(config.nodes.size());

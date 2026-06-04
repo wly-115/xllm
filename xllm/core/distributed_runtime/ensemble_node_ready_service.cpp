@@ -27,47 +27,36 @@ EnsembleNodeReadyService::EnsembleNodeReadyService(int32_t total_num)
   CHECK_GE(total_num_, 0) << "total_num must be non-negative.";
 }
 
-bool EnsembleNodeReadyService::register_ready(const std::string& node_name,
-                                              const std::string& target) {
+bool EnsembleNodeReadyService::register_ready(const std::string& node_name) {
   if (node_name.empty()) {
     LOG(ERROR) << "node_name cannot be empty.";
     return false;
   }
-  if (target.empty()) {
-    LOG(ERROR) << "target cannot be empty.";
-    return false;
-  }
 
   std::lock_guard<std::mutex> lock(mutex_);
-  auto ready_it = ready_targets_.find(node_name);
-  if (ready_it != ready_targets_.end()) {
-    if (ready_it->second == target) {
-      return true;
-    }
-    LOG(ERROR) << "node already registered with different target: "
-               << node_name;
-    return false;
+  if (ready_nodes_.find(node_name) != ready_nodes_.end()) {
+    return true;
   }
 
-  ready_targets_.emplace(node_name, target);
+  ready_nodes_.emplace(node_name);
   return true;
 }
 
-std::unordered_map<std::string, std::string> EnsembleNodeReadyService::wait(
+std::unordered_set<std::string> EnsembleNodeReadyService::wait(
     int64_t timeout_ms) {
   CHECK_GE(timeout_ms, 0) << "timeout_ms must be non-negative.";
   const absl::Time deadline = absl::Now() + absl::Milliseconds(timeout_ms);
   while (true) {
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      if (static_cast<int32_t>(ready_targets_.size()) >= total_num_) {
-        return ready_targets_;
+      if (static_cast<int32_t>(ready_nodes_.size()) >= total_num_) {
+        return ready_nodes_;
       }
     }
     if (absl::Now() >= deadline) {
       LOG(ERROR) << "Timeout waiting ensemble node ready.";
       std::lock_guard<std::mutex> lock(mutex_);
-      return ready_targets_;
+      return ready_nodes_;
     }
     absl::SleepFor(absl::Milliseconds(100));
   }
@@ -80,7 +69,7 @@ void EnsembleNodeReadyService::RegisterReady(
     ::google::protobuf::Closure* done) {
   brpc::ClosureGuard done_guard(done);
 
-  response->set_ok(register_ready(request->node_name(), request->target()));
+  response->set_ok(register_ready(request->node_name()));
 }
 
 }  // namespace xllm

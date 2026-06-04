@@ -107,7 +107,7 @@ DEFINE_int32(max_tokens_for_graph_mode,
 // --- vlm config ---
 
 DEFINE_int32(limit_image_per_prompt,
-             4,
+             12,
              "Maximum number of image per prompt. Only applicable for "
              "multimodal models.");
 
