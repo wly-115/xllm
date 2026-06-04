@@ -1,4 +1,4 @@
-/* Copyright 2025 The xLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,20 +15,16 @@ limitations under the License.
 
 #pragma once
 
-#include <vector>
+#include <torch/torch.h>
 
-#include "image_processor.h"
+#include <string>
+#include <unordered_map>
 
 namespace xllm {
 
-struct MMData;
-
-class PyWarpperImageProcessor : public ImageProcessor {
- public:
-  PyWarpperImageProcessor(const ModelArgs&);
-  ~PyWarpperImageProcessor() override = default;
-
-  bool process(const MMInput& mm_inputs, MMData& mm_datas) override;
+struct EmbeddingOutput {
+  torch::Tensor embedding;
+  std::unordered_map<std::string, torch::Tensor> metadata;
 };
 
 }  // namespace xllm

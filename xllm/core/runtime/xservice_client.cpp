@@ -329,6 +329,9 @@ InstanceInfo XServiceClient::get_instance_info(
     result.addrs.emplace_back(addr);
   }
   result.dp_size = resp.dp_size();
+  if (resp.kv_split_size() > 0) {
+    result.kv_split_size = resp.kv_split_size();
+  }
   for (auto& port : resp.ports()) {
     result.ports.emplace_back(port);
   }
@@ -547,6 +550,8 @@ std::vector<bool> XServiceClient::generations(
       proto_usage->set_num_generated_tokens(
           output.usage.value().num_generated_tokens);
       proto_usage->set_num_total_tokens(output.usage.value().num_total_tokens);
+      proto_usage->set_num_cached_tokens(
+          output.usage.value().num_cached_tokens);
     }
     req->mutable_outputs()->Reserve(output.outputs.size());
     for (auto& seq_output : output.outputs) {

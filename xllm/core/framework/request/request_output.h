@@ -24,6 +24,7 @@ limitations under the License.
 #include <vector>
 
 #include "core/common/types.h"
+#include "core/framework/multimodal/embedding_output.h"
 
 namespace xllm {
 struct Usage {
@@ -35,6 +36,9 @@ struct Usage {
 
   // the total number of tokens used in the request (prompt + completion).
   int32_t num_total_tokens = 0;
+
+  // the number of prompt tokens served from prefix cache.
+  int32_t num_cached_tokens = 0;
 };
 
 struct LogProbData {

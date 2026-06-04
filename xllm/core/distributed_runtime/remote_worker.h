@@ -67,9 +67,9 @@ class RemoteWorker : public WorkerClient {
                               const std::vector<std::string>& addrs,
                               const std::vector<uint16_t>& ports) override;
 
-  // D2D link for weight transfer
-  virtual bool link_d2d(const std::string& remote_addr) override;
-  virtual bool unlink_d2d(const std::string& remote_addr) override;
+  // P2P link for weight transfer
+  virtual bool link_p2p(const std::string& remote_addr) override;
+  virtual bool unlink_p2p(const std::string& remote_addr) override;
 
   virtual bool pull_kv_blocks(
       const uint64_t src_cluster_id,
@@ -149,6 +149,10 @@ class RemoteWorker : public WorkerClient {
 
   virtual folly::SemiFuture<bool> wakeup_async(
       const WakeupOptions& options) override;
+
+  virtual folly::SemiFuture<bool> start_profile_async() override;
+
+  virtual folly::SemiFuture<bool> stop_profile_async() override;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(RemoteWorker);

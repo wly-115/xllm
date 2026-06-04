@@ -51,8 +51,12 @@ constexpr const char* kApiServiceRoutes =
     "fork_master => ForkMasterHttp,"
     "sleep => SleepHttp,"
     "wakeup => WakeupHttp,"
-    "link_d2d => LinkD2DHttp,"
-    "unlink_d2d => UnlinkD2DHttp";
+    "start_profile => StartProfileHttp,"
+    "stop_profile => StopProfileHttp,"
+    "pause => PauseHttp,"
+    "resume => ResumeHttp,"
+    "link_p2p => LinkP2PHttp,"
+    "unlink_p2p => UnlinkP2PHttp";
 
 constexpr const char* kForkOnlyRoute = "fork_master => ForkMasterHttp";
 

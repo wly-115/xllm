@@ -35,7 +35,8 @@ limitations under the License.
 #include "core/framework/config/disagg_pd_config.h"
 #include "core/framework/config/execution_config.h"
 #include "core/framework/config/rec_config.h"
-#include "core/framework/multimodal/mm_data_visitor.h"
+#include "core/framework/multimodal/embedding_output.h"
+#include "core/framework/multimodal/mm_visitor.h"
 #include "core/framework/tokenizer/rec_tokenizer.h"
 #include "core/framework/tokenizer/tokenizer.h"
 #include "core/util/slice.h"
@@ -688,6 +689,13 @@ void Sequence::add_kv_blocks(const std::vector<Block>& blocks) {
 
 void Sequence::add_host_kv_blocks(const std::vector<Block>& blocks) {
   host_kv_state_.add_kv_blocks(blocks);
+}
+
+size_t Sequence::num_prefix_cache_tokens() const {
+  size_t cached_tokens = std::max(kv_state_.shared_kv_tokens_num(),
+                                  host_kv_state_.shared_kv_tokens_num());
+  DCHECK_LE(cached_tokens, num_prompt_tokens_);
+  return cached_tokens;
 }
 
 // release all cache blocks

@@ -54,6 +54,15 @@ class Worker {
 
   folly::SemiFuture<bool> wakeup_async(const WakeupOptions& options);
 
+  // Start/stop online timeline profiling on this worker's device.
+  bool start_profile();
+
+  bool stop_profile();
+
+  folly::SemiFuture<bool> start_profile_async();
+
+  folly::SemiFuture<bool> stop_profile_async();
+
   std::tuple<int64_t, int64_t> estimate_kv_cache_capacity();
 
   // allocate kv cache. blocking call
@@ -69,9 +78,9 @@ class Worker {
                       const std::vector<std::string>& addrs,
                       const std::vector<uint16_t>& ports);
 
-  // D2D link for weight transfer
-  bool link_d2d(const std::string& remote_addr);
-  bool unlink_d2d(const std::string& remote_addr);
+  // P2P link for weight transfer
+  bool link_p2p(const std::string& remote_addr);
+  bool unlink_p2p(const std::string& remote_addr);
 
   const bool is_driver();
 

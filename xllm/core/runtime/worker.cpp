@@ -106,12 +106,12 @@ bool Worker::unlink_cluster(const std::vector<uint64_t>& cluster_ids,
   return impl_->unlink_cluster(cluster_ids, addrs, ports);
 }
 
-bool Worker::link_d2d(const std::string& remote_addr) {
-  return impl_->link_d2d(remote_addr);
+bool Worker::link_p2p(const std::string& remote_addr) {
+  return impl_->link_p2p(remote_addr);
 }
 
-bool Worker::unlink_d2d(const std::string& remote_addr) {
-  return impl_->unlink_d2d(remote_addr);
+bool Worker::unlink_p2p(const std::string& remote_addr) {
+  return impl_->unlink_p2p(remote_addr);
 }
 
 std::tuple<int64_t, int64_t> Worker::estimate_kv_cache_capacity() {
@@ -226,6 +226,28 @@ folly::SemiFuture<bool> Worker::wakeup_async(const WakeupOptions& options) {
   auto future = promise.getSemiFuture();
   threadpool_.schedule([this, options, promise = std::move(promise)]() mutable {
     promise.setValue(this->wakeup(options));
+  });
+  return future;
+}
+
+bool Worker::start_profile() { return impl_->start_profile(); }
+
+bool Worker::stop_profile() { return impl_->stop_profile(); }
+
+folly::SemiFuture<bool> Worker::start_profile_async() {
+  folly::Promise<bool> promise;
+  auto future = promise.getSemiFuture();
+  threadpool_.schedule([this, promise = std::move(promise)]() mutable {
+    promise.setValue(this->start_profile());
+  });
+  return future;
+}
+
+folly::SemiFuture<bool> Worker::stop_profile_async() {
+  folly::Promise<bool> promise;
+  auto future = promise.getSemiFuture();
+  threadpool_.schedule([this, promise = std::move(promise)]() mutable {
+    promise.setValue(this->stop_profile());
   });
   return future;
 }

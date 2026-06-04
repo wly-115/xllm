@@ -101,9 +101,9 @@ class WorkerImpl {
                               const std::vector<std::string>& addrs,
                               const std::vector<uint16_t>& ports);
 
-  // D2D link for weight transfer
-  virtual bool link_d2d(const std::string& remote_addr);
-  virtual bool unlink_d2d(const std::string& remote_addr);
+  // P2P link for weight transfer
+  virtual bool link_p2p(const std::string& remote_addr);
+  virtual bool unlink_p2p(const std::string& remote_addr);
 
   // prepare input for execution
   virtual ForwardInput prepare_inputs(Batch& batch);
@@ -140,6 +140,12 @@ class WorkerImpl {
   virtual bool sleep(MasterStatus master_status);
 
   virtual bool wakeup(const WakeupOptions& options);
+
+  // Start/stop online timeline profiling on this worker's device. CUDA only
+  // for now; on other backends these are no-ops returning false.
+  virtual bool start_profile();
+
+  virtual bool stop_profile();
 
   virtual folly::SemiFuture<bool> pull_kv_blocks_async(
       uint64_t src_cluster_id,

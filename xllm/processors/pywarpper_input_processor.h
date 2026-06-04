@@ -1,4 +1,4 @@
-/* Copyright 2026 The xLLM Authors. All Rights Reserved.
+/* Copyright 2025 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,35 +15,20 @@ limitations under the License.
 
 #pragma once
 
-#include <cstdint>
-#include <string>
-#include <utility>
+#include <vector>
 
 #include "core/framework/model/model_args.h"
 #include "core/framework/multimodal/mm_data.h"
-#include "processors/input_processor.h"
+#include "core/framework/multimodal/mm_input.h"
 
 namespace xllm {
 
-class CLIPVLInputProcessor : public InputProcessor {
-  enum class TokenType {
-    INVALID,
-    IMAGE,
-    VIDEO,
-  };
-
+class PyWarpperInputProcessor {
  public:
-  explicit CLIPVLInputProcessor(const ModelArgs& args);
+  explicit PyWarpperInputProcessor(const ModelArgs&);
+  ~PyWarpperInputProcessor() = default;
 
-  void process(std::string& prompt, const MMData& mm_data) override;
-
- private:
-  std::pair<TokenType, size_t> find_vision_token(const std::string& prompt,
-                                                 size_t begin);
-
-  const std::string image_token_ = "<|image_pad|>";
-  const std::string video_token_ = "<|video_pad|>";
-  int32_t merge_size_ = 0;
+  bool process(const MMInput& mm_inputs, MMData& mm_datas);
 };
 
 }  // namespace xllm
