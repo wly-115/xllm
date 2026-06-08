@@ -5,18 +5,36 @@ package xllm.proto;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
-message EngineServiceRequest {
-  string request_id = 1;
-  string node_name = 2;
-  bytes payload = 3;
+message NodePayload {
+  string schema = 1;
+  bytes data = 2;
+  map<string, string> metadata = 3;
 }
 
-message EngineServiceResponse {
+message NodeInput {
+  string request_id = 1;
+  string node_name = 2;
+  int64 deadline_ms = 3;
+  optional NodePayload primary_input = 4;
+}
+
+message NodeOutput {
   bool ok = 1;
   string error_message = 2;
-  bytes payload = 3;
+  NodePayload payload = 3;
+}
+
+message NodeData {
+  string request_id = 1;
+  string from_node = 2;
+  NodePayload payload = 3;
+}
+
+message Ack {
+  bool ok = 1;
 }
 
 service EngineService {
-  rpc Submit(EngineServiceRequest) returns (EngineServiceResponse);
+  rpc Submit(NodeInput) returns (NodeOutput);
+  rpc TransferData(NodeData) returns (Ack);
 }
