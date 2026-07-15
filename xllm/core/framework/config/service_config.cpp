@@ -55,6 +55,15 @@ DEFINE_int32(health_check_interval_ms,
              3000,
              "Worker health check interval in milliseconds.");
 
+DEFINE_string(omni_master_addr,
+              "127.0.0.1:19890",
+              "The OmniMaster address for omni graph ready registration.");
+
+DEFINE_string(omni_graph_config_path,
+              "",
+              "The omni graph config YAML path used by OmniMaster and "
+              "EngineServer startup.");
+
 namespace xllm {
 
 void ServiceConfig::from_flags() {

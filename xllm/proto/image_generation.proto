@@ -125,7 +125,10 @@ message ImageGenerationRequest {
 // Individual image generation result data
 message ImageGenData {
 
-  optional string image = 1;
+  // Raw generated image bytes (e.g. PNG). Use 'bytes' to avoid UTF-8
+  // validation on raw binary data during serialization. The public API
+  // layer base64-encodes this before returning it to clients.
+  optional bytes image = 1;
 
   // Width of the generated image in pixels
   int32 width = 3;

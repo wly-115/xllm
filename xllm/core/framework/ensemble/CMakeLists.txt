@@ -1,0 +1,93 @@
+include(cc_library)
+include(cc_test)
+
+cc_library(
+  NAME
+    graph_config
+  HDRS
+    graph_config.h
+  SRCS
+    graph_config.cpp
+  DEPS
+    absl::flat_hash_map
+    glog::glog
+    yaml-cpp::yaml-cpp
+)
+
+cc_library(
+  NAME
+    node_payload
+  HDRS
+    node_payload.h
+    node_payload_fields.h
+  SRCS
+    node_payload.cpp
+  DEPS
+    :request
+    glog::glog
+    proto::xllm_proto
+    torch
+)
+
+cc_library(
+  NAME
+    ensemble_protocol
+  HDRS
+    ensemble_protocol.h
+  SRCS
+    ensemble_protocol.cpp
+  DEPS
+    :node_payload
+    :request
+    :worker_params_conversion
+    glog::glog
+    proto::xllm_proto
+)
+
+cc_library(
+  NAME
+    qwen_image_edit_preprocessor
+  HDRS
+    qwen_image_edit_preprocessor.h
+  SRCS
+    qwen_image_edit_preprocessor.cpp
+  DEPS
+    :graph_config
+    :model_loader
+    :models
+    :node_payload
+    :processors
+    :request
+    :tokenizer
+    torch
+)
+
+cc_library(
+  NAME
+    graph
+)
+
+cc_library(
+  NAME
+    engine_config
+  HDRS
+    engine_config.h
+  SRCS
+    engine_config.cpp
+  DEPS
+    graph_config
+    :common
+    :util
+    gflags::gflags
+    glog::glog
+)
+
+cc_test(
+  NAME
+    graph_config_test
+  SRCS
+    graph_config_test.cpp
+  DEPS
+    graph_config
+    GTest::gtest_main
+)

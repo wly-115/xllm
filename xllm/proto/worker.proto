@@ -347,6 +347,19 @@ service Collective {
   rpc Sync(AddressInfo) returns (CommUniqueIdList);
 }
 
+message EnsembleNodeReadyRequest {
+  string node_name = 1;
+}
+
+message EnsembleNodeReadyResponse {
+  bool ok = 1;
+}
+
+service EnsembleNodeReady {
+  rpc RegisterReady(EnsembleNodeReadyRequest)
+      returns (EnsembleNodeReadyResponse);
+}
+
 // Worker receive action from master engine.
 service DistributeWorker {
   rpc Hello (Status) returns (Status);

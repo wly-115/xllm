@@ -401,3 +401,7 @@ DECLARE_bool(enable_aclnn_swiglu);
 DECLARE_bool(use_cpp_chat_template);
 
 DECLARE_int32(health_check_interval_ms);
+
+// --- omni ensemble config ---
+DECLARE_string(omni_master_addr);
+DECLARE_string(omni_graph_config_path);
