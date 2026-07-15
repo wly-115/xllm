@@ -43,6 +43,7 @@ limitations under the License.
 #include "runtime/llm_worker_impl.h"
 #include "runtime/params_utils.h"
 #include "runtime/worker.h"
+#include "scheduler/scheduler_factory.h"
 #include "util/env_var.h"
 #include "util/pretty_print.h"
 #include "util/tensor_helper.h"
@@ -124,6 +125,66 @@ bool VLMEngine::init() {
   }
 
   return true;
+}
+
+VLMEngine::~VLMEngine() = default;
+
+bool VLMEngine::init_scheduler() {
+  if (scheduler_ != nullptr) {
+    return true;
+  }
+
+  ContinuousScheduler::Options scheduler_options;
+  scheduler_options.max_tokens_per_batch(options_.max_tokens_per_batch())
+      .max_seqs_per_batch(options_.max_seqs_per_batch())
+      .max_tokens_per_chunk_for_prefill(
+          options_.max_tokens_per_chunk_for_prefill())
+      .dp_size(options_.dp_size())
+      .enable_disagg_pd(options_.enable_disagg_pd())
+      .enable_chunked_prefill(options_.enable_chunked_prefill())
+      .instance_name(options_.instance_name())
+      .instance_role(options_.instance_role())
+      .kv_cache_transfer_mode(options_.kv_cache_transfer_mode())
+      .enable_service_routing(options_.enable_service_routing())
+      .disable_log_stats(options_.disable_log_stats())
+      .disable_ttft_profiling(options_.disable_ttft_profiling())
+      .enable_forward_interruption(options_.enable_forward_interruption())
+      .enable_schedule_overlap(options_.enable_schedule_overlap())
+      .server_idx(options_.server_idx());
+  scheduler_ = create_continuous_scheduler(this, scheduler_options);
+  return scheduler_ != nullptr;
+}
+
+bool VLMEngine::add_request(std::shared_ptr<Request>& request) {
+  CHECK(scheduler_ != nullptr);
+  return scheduler_->add_request(request);
+}
+
+void VLMEngine::incr_pending_requests(size_t count) {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->incr_pending_requests(count);
+}
+
+void VLMEngine::decr_pending_requests() {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->decr_pending_requests();
+}
+
+void VLMEngine::step_scheduler(const absl::Duration& timeout) {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->step(timeout);
+}
+
+void VLMEngine::generate() {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->generate();
+}
+
+const InstanceInfo* VLMEngine::instance_info() const {
+  if (scheduler_ == nullptr) {
+    return nullptr;
+  }
+  return &scheduler_->get_instance_info();
 }
 
 bool VLMEngine::init_model() {

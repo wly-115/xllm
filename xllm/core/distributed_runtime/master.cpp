@@ -264,7 +264,10 @@ Master::Master(const Options& options, EngineType type)
             options_.enable_prefill_piecewise_graph())
         .max_tokens_for_graph_mode(options_.max_tokens_for_graph_mode())
         .max_tokens_per_chunk_for_prefill(
-            options_.max_tokens_per_chunk_for_prefill());
+            options_.max_tokens_per_chunk_for_prefill())
+        .disable_ttft_profiling(options_.disable_ttft_profiling())
+        .enable_forward_interruption(options_.enable_forward_interruption())
+        .enable_service_routing(options_.enable_service_routing());
 
     auto engine = std::make_unique<VLMEngine>(eng_options);
     engine_ = std::move(engine);

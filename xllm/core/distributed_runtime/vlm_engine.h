@@ -33,6 +33,8 @@ limitations under the License.
 #include "util/threadpool.h"
 
 namespace xllm {
+class Request;
+class Scheduler;
 
 class VLMEngine : public Engine {
  public:
@@ -40,13 +42,27 @@ class VLMEngine : public Engine {
   VLMEngine(const runtime::Options& options,
             std::shared_ptr<DistManager> dist_manager = nullptr);
 
-  virtual ~VLMEngine() = default;
+  virtual ~VLMEngine();
 
   ForwardOutput step(std::vector<Batch>& batch) override;
 
   const runtime::Options& options() const { return options_; }
 
   bool init() override;
+
+  bool init_scheduler() override;
+
+  bool add_request(std::shared_ptr<Request>& request) override;
+
+  void incr_pending_requests(size_t count) override;
+
+  void decr_pending_requests() override;
+
+  void step_scheduler(const absl::Duration& timeout) override;
+
+  void generate() override;
+
+  const InstanceInfo* instance_info() const override;
 
   void update_last_step_result(std::vector<Batch>& batch) override;
 
@@ -87,6 +103,8 @@ class VLMEngine : public Engine {
   std::shared_ptr<DistManager> dist_manager_ = nullptr;
 
   std::unique_ptr<ThreadPool> threadpool_ = nullptr;
+
+  std::unique_ptr<Scheduler> scheduler_;
 
   // config for kv cache
   int64_t n_local_kv_heads_ = 0;

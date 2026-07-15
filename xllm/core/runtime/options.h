@@ -219,6 +219,12 @@ struct Options {
   // disable per-request statistic logs.
   PROPERTY(bool, disable_log_stats) = false;
 
+  // disable TTFT profiling metrics.
+  PROPERTY(bool, disable_ttft_profiling) = false;
+
+  // enable forward interruption for preemption.
+  PROPERTY(bool, enable_forward_interruption) = false;
+
   // the path to spawn worker binary
   PROPERTY(std::string, spawn_worker_path) = "";
 

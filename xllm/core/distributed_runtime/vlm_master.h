@@ -34,7 +34,6 @@ limitations under the License.
 #include "framework/request/request_params.h"
 #include "framework/tokenizer/tokenizer.h"
 #include "master.h"
-#include "scheduler/continuous_scheduler.h"
 #include "xllm/processors/multimodal_processor.h"
 
 namespace xllm {
@@ -101,8 +100,6 @@ class VLMMaster : public Master {
                                             RequestParams sp,
                                             std::string payload,
                                             OutputCallback callback);
-
-  std::unique_ptr<Scheduler> scheduler_;
 
   // model args
   ModelArgs model_args_;

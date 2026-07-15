@@ -27,7 +27,9 @@ limitations under the License.
 #include "core/platform/device.h"
 #include "framework/parallel_state/parallel_args.h"
 #include "framework/parallel_state/parallel_state.h"
+#include "framework/request/dit_request.h"
 #include "runtime/worker.h"
+#include "scheduler/scheduler_factory.h"
 #include "util/env_var.h"
 #include "util/timer.h"
 
@@ -107,6 +109,45 @@ bool DiTEngine::init_model() {
 
   LOG(INFO) << "All workers successfully initialized the model.";
   return true;
+}
+
+DiTEngine::~DiTEngine() = default;
+
+bool DiTEngine::init_scheduler() {
+  if (scheduler_ != nullptr) {
+    return true;
+  }
+
+  DiTScheduler::Options scheduler_options;
+  scheduler_options.max_request_per_batch(options_.max_requests_per_batch())
+      .disable_log_stats(options_.disable_log_stats());
+  scheduler_ = create_dit_scheduler(this, scheduler_options);
+  return scheduler_ != nullptr;
+}
+
+bool DiTEngine::add_request(std::shared_ptr<DiTRequest>& request) {
+  CHECK(scheduler_ != nullptr);
+  return scheduler_->add_request(request);
+}
+
+void DiTEngine::incr_pending_requests(size_t count) {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->incr_pending_requests(count);
+}
+
+void DiTEngine::decr_pending_requests() {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->decr_pending_requests();
+}
+
+void DiTEngine::step_scheduler(const absl::Duration& timeout) {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->step(timeout);
+}
+
+void DiTEngine::generate() {
+  CHECK(scheduler_ != nullptr);
+  scheduler_->generate();
 }
 
 // TODO : change to ForwardOutput?
