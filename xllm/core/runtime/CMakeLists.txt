@@ -78,6 +78,7 @@ cc_library(
     :platform
     :model_context
     :request
+    :worker_params_conversion
     :encoder_cache
     :state_dict
     :dit_cache

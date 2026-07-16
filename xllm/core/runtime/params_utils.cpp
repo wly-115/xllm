@@ -380,48 +380,9 @@ bool dit_forward_input_to_proto(const DiTForwardInput& dit_inputs,
     pb_dit_inputs->set_audio_prompt_text(dit_inputs.audio_prompt_text);
   }
 
-  if (!generation_params_to_proto(dit_inputs.generation_params,
-                                  pb_dit_inputs->mutable_generation_params())) {
-    LOG(ERROR) << "Failed to convert generation_params";
-    return false;
-  }
+  dit_generation_params_to_proto(dit_inputs.generation_params,
+                                 pb_dit_inputs->mutable_generation_params());
 
-  return true;
-}
-
-bool generation_params_to_proto(
-    const DiTGenerationParams& dit_generation_params,
-    proto::DiTGenerationParams* pb_dit_generation_params) {
-  pb_dit_generation_params->set_width(dit_generation_params.width);
-  pb_dit_generation_params->set_height(dit_generation_params.height);
-  pb_dit_generation_params->set_num_inference_steps(
-      dit_generation_params.num_inference_steps);
-  pb_dit_generation_params->set_true_cfg_scale(
-      dit_generation_params.true_cfg_scale);
-  pb_dit_generation_params->set_guidance_scale(
-      dit_generation_params.guidance_scale);
-  pb_dit_generation_params->set_num_images_per_prompt(
-      dit_generation_params.num_images_per_prompt);
-  pb_dit_generation_params->set_seed(dit_generation_params.seed);
-  pb_dit_generation_params->set_max_sequence_length(
-      dit_generation_params.max_sequence_length);
-  pb_dit_generation_params->set_strength(dit_generation_params.strength);
-  pb_dit_generation_params->set_enable_cfg_renorm(
-      dit_generation_params.enable_cfg_renorm);
-  pb_dit_generation_params->set_cfg_renorm_min(
-      dit_generation_params.cfg_renorm_min);
-  pb_dit_generation_params->set_num_frames(dit_generation_params.num_frames);
-  pb_dit_generation_params->set_force_video_output(
-      dit_generation_params.force_video_output);
-  pb_dit_generation_params->set_video_fps(dit_generation_params.video_fps);
-  pb_dit_generation_params->set_guidance_scale_2(
-      dit_generation_params.guidance_scale_2);
-  pb_dit_generation_params->set_seconds(dit_generation_params.seconds);
-  pb_dit_generation_params->set_boundary_ratio(
-      dit_generation_params.boundary_ratio);
-  pb_dit_generation_params->set_flow_shift(dit_generation_params.flow_shift);
-  pb_dit_generation_params->set_num_videos_per_prompt(
-      dit_generation_params.num_videos_per_prompt);
   return true;
 }
 
@@ -500,11 +461,8 @@ bool proto_to_dit_forward_input(const proto::DiTForwardInput& pb_dit_inputs,
     dit_inputs.last_images = util::proto_to_torch(pb_dit_inputs.last_images());
   }
 
-  if (!proto_to_generation_params(pb_dit_inputs.generation_params(),
-                                  dit_inputs.generation_params)) {
-    LOG(ERROR) << "Failed to convert generation_params";
-    return false;
-  }
+  dit_generation_params_from_proto(pb_dit_inputs.generation_params(),
+                                   &dit_inputs.generation_params);
 
   if (pb_dit_inputs.has_prompt_audio()) {
     dit_inputs.prompt_audio =
@@ -514,43 +472,6 @@ bool proto_to_dit_forward_input(const proto::DiTForwardInput& pb_dit_inputs,
     dit_inputs.audio_prompt_text = pb_dit_inputs.audio_prompt_text();
   }
 
-  return true;
-}
-
-bool proto_to_generation_params(
-    const proto::DiTGenerationParams& pb_dit_generation_params,
-    DiTGenerationParams& dit_generation_params) {
-  LOG(INFO) << "start brpc transfer";
-  dit_generation_params.width = pb_dit_generation_params.width();
-  dit_generation_params.height = pb_dit_generation_params.height();
-  dit_generation_params.num_inference_steps =
-      pb_dit_generation_params.num_inference_steps();
-  dit_generation_params.true_cfg_scale =
-      pb_dit_generation_params.true_cfg_scale();
-  dit_generation_params.guidance_scale =
-      pb_dit_generation_params.guidance_scale();
-  dit_generation_params.num_images_per_prompt =
-      pb_dit_generation_params.num_images_per_prompt();
-  dit_generation_params.seed = pb_dit_generation_params.seed();
-  dit_generation_params.max_sequence_length =
-      pb_dit_generation_params.max_sequence_length();
-  dit_generation_params.strength = pb_dit_generation_params.strength();
-  dit_generation_params.enable_cfg_renorm =
-      pb_dit_generation_params.enable_cfg_renorm();
-  dit_generation_params.cfg_renorm_min =
-      pb_dit_generation_params.cfg_renorm_min();
-  dit_generation_params.num_frames = pb_dit_generation_params.num_frames();
-  dit_generation_params.force_video_output =
-      pb_dit_generation_params.force_video_output();
-  dit_generation_params.video_fps = pb_dit_generation_params.video_fps();
-  dit_generation_params.guidance_scale_2 =
-      pb_dit_generation_params.guidance_scale_2();
-  dit_generation_params.seconds = pb_dit_generation_params.seconds();
-  dit_generation_params.boundary_ratio =
-      pb_dit_generation_params.boundary_ratio();
-  dit_generation_params.flow_shift = pb_dit_generation_params.flow_shift();
-  dit_generation_params.num_videos_per_prompt =
-      pb_dit_generation_params.num_videos_per_prompt();
   return true;
 }
 

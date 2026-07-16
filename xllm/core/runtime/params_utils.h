@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <torch/torch.h>
 
+#include "core/framework/request/worker_params_conversion.h"
 #include "framework/model/model_input_params.h"
 #include "framework/request/sequence.h"
 #include "runtime/forward_params.h"
@@ -74,16 +75,8 @@ bool block_transfer_info_to_proto(
 bool dit_forward_input_to_proto(const DiTForwardInput& dit_inputs,
                                 proto::DiTForwardInput* pb_dit_inputs);
 
-bool generation_params_to_proto(
-    const DiTGenerationParams& dit_generation_params,
-    proto::DiTGenerationParams* pb_dit_generation_params);
-
 bool proto_to_dit_forward_input(const proto::DiTForwardInput& pb_dit_inputs,
                                 DiTForwardInput& dit_inputs);
-
-bool proto_to_generation_params(
-    const proto::DiTGenerationParams& pb_dit_generation_params,
-    DiTGenerationParams& dit_generation_params);
 
 bool proto_to_dit_forward_output(const proto::DiTForwardOutput& pb_dit_outputs,
                                  DiTForwardOutput& dit_outputs);

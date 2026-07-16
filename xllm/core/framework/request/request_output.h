@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "core/common/types.h"
@@ -109,6 +110,8 @@ struct RequestOutput {
 
   // the prompt text for the request.
   std::optional<std::string> prompt;
+
+  std::unordered_map<std::string, std::string> metadata;
 
   // the status of the request.
   std::optional<Status> status;

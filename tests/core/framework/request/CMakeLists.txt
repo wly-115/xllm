@@ -24,6 +24,16 @@ cc_test(
 
 cc_test(
   NAME
+    worker_params_conversion_test
+  SRCS
+    worker_params_conversion_test.cpp
+  DEPS
+    :worker_params_conversion
+    GTest::gtest_main
+)
+
+cc_test(
+  NAME
     stopping_checker_test
   SRCS
     stopping_checker_test.cpp

@@ -71,6 +71,7 @@ void AsyncResponseProcessor::process_failed_request(
     output.request_id = request->request_id();
     output.service_request_id = request->service_request_id();
     output.target_xservice_addr = request->source_xservice_addr();
+    output.metadata = request->state().metadata;
     output.status = status;
     request->state().output_func(output);
   };
@@ -227,6 +228,7 @@ void AsyncResponseProcessor::process_stream_request(
 
       RequestOutput req_output;
       req_output.request_id = request->request_id();
+      req_output.metadata = request->state().metadata;
       for (size_t i = 0; i < indexes.size(); ++i) {
         const size_t index = indexes[i];
         const size_t size = num_tokens[i];
@@ -294,6 +296,7 @@ void AsyncResponseProcessor::batch_process_stream_requests(
       req_output->request_id = request->request_id();
       req_output->service_request_id = request->service_request_id();
       req_output->target_xservice_addr = request->source_xservice_addr();
+      req_output->metadata = request->state().metadata;
       for (size_t i = 0; i < indexes.size(); ++i) {
         const size_t index = indexes[i];
         const size_t size = num_tokens[i];

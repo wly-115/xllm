@@ -205,6 +205,61 @@ TEST(SampleSlotTest, RequestPropagatesSampleSlotsToSequenceRuntime) {
   EXPECT_EQ(runtime_sample_slots[1].sample_id, 1);
 }
 
+TEST(SampleSlotTest, RequestOutputPreservesMetadata) {
+  CharTokenizer tokenizer;
+  RequestSamplingParam sampling_param;
+  StoppingChecker stopping_checker;
+  RequestState request_state(
+      "abc",
+      std::vector<int32_t>{1, 'a', 'b', 'c'},
+      sampling_param,
+      SchedulerParam{},
+      stopping_checker,
+      /*seq_capacity=*/8,
+      /*n=*/1,
+      /*best_of=*/1,
+      /*logprobs=*/false,
+      /*stream=*/false,
+      /*echo=*/false,
+      /*skip_special_tokens=*/true,
+      /*enable_schedule_overlap=*/false,
+      [](const RequestOutput&) { return true; },
+      OutputsFunc{});
+  request_state.metadata = {{"omni.output_field", "prompt_embed"}};
+
+  Request request("metadata-request", "", "", request_state);
+  RequestOutput output = request.generate_output(tokenizer);
+
+  EXPECT_EQ(output.metadata, request_state.metadata);
+}
+
+TEST(SampleSlotTest, RequestOutputMetadataIsEmptyByDefault) {
+  CharTokenizer tokenizer;
+  RequestSamplingParam sampling_param;
+  StoppingChecker stopping_checker;
+  RequestState request_state(
+      "abc",
+      std::vector<int32_t>{1, 'a', 'b', 'c'},
+      sampling_param,
+      SchedulerParam{},
+      stopping_checker,
+      /*seq_capacity=*/8,
+      /*n=*/1,
+      /*best_of=*/1,
+      /*logprobs=*/false,
+      /*stream=*/false,
+      /*echo=*/false,
+      /*skip_special_tokens=*/true,
+      /*enable_schedule_overlap=*/false,
+      [](const RequestOutput&) { return true; },
+      OutputsFunc{});
+
+  Request request("metadata-request", "", "", request_state);
+  RequestOutput output = request.generate_output(tokenizer);
+
+  EXPECT_TRUE(output.metadata.empty());
+}
+
 TEST(SampleSlotTest, RequestOutputSplitsSampleResultsBySampleId) {
   torch::Device device(Platform::type_torch(), 0);
   BlockManager::Options options;

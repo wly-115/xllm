@@ -1,6 +1,19 @@
 include(cc_library)
 
 cc_library(
+  NAME
+    worker_params_conversion
+  HDRS
+    worker_params_conversion.h
+  SRCS
+    worker_params_conversion.cpp
+  DEPS
+    glog::glog
+    proto::xllm_proto
+    torch
+)
+
+cc_library(
   NAME 
     request
   HDRS
@@ -8,6 +21,8 @@ cc_library(
     dit_request_params.h
     finish_reason.h
     incremental_decoder.h
+    omni_request.h
+    omni_request_state.h
     request_base.h
     request.h
     dit_request.h

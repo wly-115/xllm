@@ -174,6 +174,7 @@ RequestOutput Request::generate_output(const Tokenizer& tokenizer,
   output.request_id = request_id_;
   output.service_request_id = service_request_id_;
   output.target_xservice_addr = source_xservice_addr_;
+  output.metadata = state_.metadata;
   output.usage = usage;
   output.status = Status(StatusCode::OK);
   output.finished = finished();

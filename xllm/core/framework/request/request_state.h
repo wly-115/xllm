@@ -22,6 +22,7 @@ limitations under the License.
 #include <deque>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "core/framework/multimodal/mm_data.h"
@@ -125,6 +126,8 @@ struct RequestState final {
   std::string prompt;
 
   std::vector<int32_t> prompt_tokens;
+
+  std::unordered_map<std::string, std::string> metadata;
 
   bool stream = false;
 

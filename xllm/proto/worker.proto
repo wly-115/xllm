@@ -294,6 +294,10 @@ message DiTGenerationParams {
   float boundary_ratio = 17;
   float flow_shift = 18;
   uint32 num_videos_per_prompt = 19;
+  int32 audio_duration_frames = 20;
+  int32 audio_steps = 21;
+  string audio_guidance_method = 22;
+  int32 audio_sampling_rate = 23;
 }
 
 message PackedForwardInput {
