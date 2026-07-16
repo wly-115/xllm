@@ -15,29 +15,26 @@ limitations under the License.
 
 #pragma once
 
-#include <memory>
+#include <string>
 
-#include "core/framework/ensemble/graph_config.h"
-#include "core/framework/ensemble/node_payload.h"
-#include "core/framework/request/omni_request_state.h"
+#include "core/framework/model/model_args.h"
+#include "core/framework/tokenizer/tokenizer_args.h"
 
 namespace xllm {
 
-class MultimodalProcessorBase;
-
-class QwenImageEditPreprocessor final {
+class HFModelConfigLoader final {
  public:
-  explicit QwenImageEditPreprocessor(
-      std::unique_ptr<MultimodalProcessorBase> multimodal_processor);
-  ~QwenImageEditPreprocessor();
+  static bool load_model_args(const std::string& model_dir, ModelArgs* args);
 
-  NodePayload preprocess(const OmniRequestInput& input) const;
+  static bool load_tokenizer_args(const std::string& tokenizer_dir,
+                                  const ModelArgs& model_args,
+                                  TokenizerArgs* tokenizer_args);
 
- private:
-  std::unique_ptr<MultimodalProcessorBase> multimodal_processor_;
+  static bool load_image_preprocessor_args(const std::string& processor_dir,
+                                           ModelArgs* args);
+
+  static bool load_video_preprocessor_args(const std::string& processor_dir,
+                                           ModelArgs* args);
 };
-
-std::unique_ptr<QwenImageEditPreprocessor> create_qwen_image_edit_preprocessor(
-    const PreprocessorConfig& config);
 
 }  // namespace xllm

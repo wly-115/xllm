@@ -11,7 +11,7 @@ cc_library(
   DEPS
     absl::flat_hash_map
     glog::glog
-    yaml-cpp::yaml-cpp
+    yaml-cpp
 )
 
 cc_library(

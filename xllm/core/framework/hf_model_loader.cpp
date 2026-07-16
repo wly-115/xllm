@@ -30,13 +30,13 @@ limitations under the License.
 #include <cctype>
 #include <filesystem>
 #include <limits>
-#include <optional>
 #include <unordered_map>
 #include <vector>
 
 #include "core/common/version_singleton.h"
 #include "core/framework/config/model_config.h"
 #include "core/framework/config/rec_config.h"
+#include "core/framework/hf_model_config_loader.h"
 #include "core/framework/state_dict/rec_vocab_dict.h"
 #include "core/framework/state_dict/safetensors/safetensors.h"
 #include "core/framework/tokenizer/fast_tokenizer.h"
@@ -48,12 +48,10 @@ limitations under the License.
 #include "core/platform/platform.h"
 #include "core/util/blocking_counter.h"
 #include "core/util/json_reader.h"
-#include "core/util/model_config_utils.h"
 #include "core/util/rec_model_utils.h"
 #include "core/util/scope_guard.h"
 #include "core/util/tensor_helper.h"
 #include "core/util/utils.h"
-#include "models/model_registry.h"
 
 namespace xllm {
 
@@ -800,40 +798,7 @@ bool HFModelLoader::load_args(const std::string& model_weights_path) {
 }
 
 bool HFModelLoader::load_model_args(const std::string& model_weights_path) {
-  JsonReader reader;
-  const std::string args_file_path = model_weights_path + "/config.json";
-  if (!reader.parse(args_file_path)) {
-    LOG(ERROR) << "Failed to parse model args file: " << args_file_path;
-    return false;
-  }
-
-  const std::string model_type =
-      util::get_model_type(reader,
-                           std::filesystem::path(model_weights_path),
-                           ModelConfig::get_instance().backend());
-
-  std::string resolved_model_type;
-  std::string error_message;
-  if (!resolve_model_registration_name(
-          model_type, &resolved_model_type, &error_message)) {
-    LOG(ERROR) << error_message;
-    return false;
-  }
-
-  auto model_args_loader =
-      ModelRegistry::get_model_args_loader(resolved_model_type);
-  if (model_args_loader == nullptr) {
-    LOG(ERROR) << "Failed to find model args loader for model type "
-               << resolved_model_type;
-    return false;
-  }
-  const JsonReader config_reader = normalize_config_torch_dtype(reader);
-  model_args_loader(config_reader, &args_);
-  args_.enable_mla(
-      util::should_enable_mla(std::filesystem::path(model_weights_path),
-                              ModelConfig::get_instance().backend()));
-
-  return true;
+  return HFModelConfigLoader::load_model_args(model_weights_path, &args_);
 }
 
 bool HFModelLoader::load_quant_args(const std::string& model_weights_path) {
@@ -1040,220 +1005,21 @@ bool HFModelLoader::load_quant_args(const std::string& model_weights_path) {
   return true;
 }
 
-namespace {
-std::optional<std::string> load_chat_template_file(const std::string& dir) {
-  // chat_template.json
-  const std::string chat_template_path = dir + "/chat_template.json";
-  JsonReader reader;
-  if (reader.parse(chat_template_path);
-      auto v = reader.value<std::string>("chat_template")) {
-    return v;
-  }
-  // chat_template.jinja
-  const std::string raw_chat_template_path = dir + "/chat_template.jinja";
-  std::ifstream file(raw_chat_template_path);
-  if (file.is_open()) {
-    std::ostringstream content;
-    content << file.rdbuf();
-    file.close();
-    return content.str();
-  }
-  return std::nullopt;
-}
-}  // namespace
-
 bool HFModelLoader::load_tokenizer_args(const std::string& model_weights_path) {
-  // tokenizer args from tokenizer_config.json
-  JsonReader tokenizer_reader;
-  const std::string tokenizer_args_file_path =
-      model_weights_path_ + "/tokenizer_config.json";
-
-  // check if tokenizer.json exists, if exists, set the tokenizer type to fast
-  const std::string tokenizer_json_path =
-      model_weights_path + "/tokenizer.json";
-  if (std::filesystem::exists(tokenizer_json_path)) {
-    tokenizer_args_.tokenizer_type() = "fast";
-    tokenizer_args_.vocab_file() = tokenizer_json_path;
-  }
-
-  if (tokenizer_reader.parse(tokenizer_args_file_path)) {
-    // read chat template if exists
-    if (auto v = load_chat_template_file(model_weights_path_)) {
-      tokenizer_args_.chat_template() = v.value();
-    } else if (auto v = tokenizer_reader.value<std::string>("chat_template")) {
-      tokenizer_args_.chat_template() = v.value();
-    }
-    if (auto v = tokenizer_reader.value<bool>("add_bos_token")) {
-      tokenizer_args_.add_bos_token() = v.value();
-    }
-    if (auto v = tokenizer_reader.value<bool>("add_eos_token")) {
-      tokenizer_args_.add_eos_token() = v.value();
-    }
-    if (auto v = tokenizer_reader.value<std::string>("tokenizer_class")) {
-      tokenizer_args_.tokenizer_class() = v.value();
-    }
-    // read bos_token
-    if (auto v = tokenizer_reader.value<std::string>("bos_token.content")) {
-      tokenizer_args_.bos_token() = v.value();
-    } else if (auto v = tokenizer_reader.value<std::string>("bos_token")) {
-      tokenizer_args_.bos_token() = v.value();
-    }
-    // read eos_token
-    if (auto v = tokenizer_reader.value<std::string>("eos_token.content")) {
-      tokenizer_args_.eos_token() = v.value();
-    } else if (auto v = tokenizer_reader.value<std::string>("eos_token")) {
-      tokenizer_args_.eos_token() = v.value();
-    }
-    // read pad_token
-    if (auto v = tokenizer_reader.value<std::string>("pad_token.content")) {
-      tokenizer_args_.pad_token() = v.value();
-    } else if (auto v = tokenizer_reader.value<std::string>("pad_token")) {
-      tokenizer_args_.pad_token() = v.value();
-    }
-  }
-
-  auto tokenizer_args_loader =
-      ModelRegistry::get_tokenizer_args_loader(args_.model_type());
-  if (tokenizer_args_loader != nullptr) {
-    if (!tokenizer_args_loader(tokenizer_reader, &tokenizer_args_)) {
-      LOG(ERROR) << "Failed to load tokenizer args from "
-                 << tokenizer_args_file_path;
-      return false;
-    }
-  }
-
-  return true;
+  return HFModelConfigLoader::load_tokenizer_args(
+      model_weights_path, args_, &tokenizer_args_);
 }
 
 bool HFModelLoader::load_image_preprocessor_args(
     const std::string& model_weights_path) {
-  // image preprocessor args
-  JsonReader image_preprocess_reader;
-  const std::string image_preprocess_file_path =
-      model_weights_path + "/preprocessor_config.json";
-  if (image_preprocess_reader.parse(image_preprocess_file_path)) {
-    LOG(INFO) << "Success to parse image preprocess args file: "
-              << image_preprocess_file_path;
-    args_.mm_image_do_center_crop() =
-        image_preprocess_reader.value_or<bool>("do_center_crop", false);
-    args_.mm_image_crop_height_size() =
-        image_preprocess_reader.value_or<int>("crop_size.height", 335);
-    args_.mm_image_crop_width_size() =
-        image_preprocess_reader.value_or<int>("crop_size.width", 335);
-
-    args_.mm_image_do_resize() =
-        image_preprocess_reader.value_or<bool>("do_resize", false);
-    args_.mm_image_resize_shortest_edge() =
-        image_preprocess_reader.value_or<int>("size.shortest_edge", 335);
-    args_.mm_image_resample() =
-        image_preprocess_reader.value_or<int>("resample", 335);
-
-    args_.mm_image_do_rescale() =
-        image_preprocess_reader.value_or<bool>("do_rescale", false);
-    args_.mm_image_rescale_factor() =
-        image_preprocess_reader.value_or<double>("rescale_factor", 0);
-
-    args_.mm_image_do_normalize() =
-        image_preprocess_reader.value_or<bool>("do_normalize", false);
-
-    const auto& image_prerocess_data = image_preprocess_reader.data();
-    if (image_preprocess_reader.contains("image_mean")) {
-      args_.mm_image_normalize_mean() =
-          image_prerocess_data["image_mean"].get<std::vector<double>>();
-    }
-
-    if (image_preprocess_reader.contains("image_std")) {
-      args_.mm_image_normalize_std() =
-          image_prerocess_data["image_std"].get<std::vector<double>>();
-    }
-
-    if (image_preprocess_reader.contains("norm_mean")) {
-      args_.mm_image_normalize_mean() =
-          image_prerocess_data["norm_mean"].get<std::vector<double>>();
-    }
-
-    if (image_preprocess_reader.contains("norm_std")) {
-      args_.mm_image_normalize_std() =
-          image_prerocess_data["norm_std"].get<std::vector<double>>();
-    }
-
-    args_.mm_image_shortest_edge() =
-        image_preprocess_reader.value_or<int>("size.shortest_edge", 0);
-
-    args_.mm_image_longest_edge() =
-        image_preprocess_reader.value_or<int>("size.longest_edge", 0);
-
-    args_.mm_image_min_pixels() =
-        image_preprocess_reader.value_or<int>("min_pixels", 0);
-
-    args_.mm_image_max_pixels() =
-        image_preprocess_reader.value_or<int>("max_pixels", 0);
-
-    args_.mm_image_patch_size() =
-        image_preprocess_reader.value_or<int>("patch_size", 0);
-
-    args_.mm_image_temporal_patch_size() =
-        image_preprocess_reader.value_or<int>("temporal_patch_size", 0);
-
-    args_.mm_image_merge_size() =
-        image_preprocess_reader.value_or<int>("merge_size", 0);
-
-    args_.mm_image_feature_size() =
-        image_preprocess_reader.value_or<int>("image_feature_size", 0);
-
-    args_.mm_scale_resolution() =
-        image_preprocess_reader.value_or<int>("scale_resolution", 0);
-
-    args_.mm_slice_mode() =
-        image_preprocess_reader.value_or<bool>("slice_mode", false);
-
-    args_.mm_use_image_id() =
-        image_preprocess_reader.value_or<bool>("use_image_id", false);
-  }
-
-  return true;
+  return HFModelConfigLoader::load_image_preprocessor_args(model_weights_path,
+                                                           &args_);
 }
 
 bool HFModelLoader::load_video_preprocessor_args(
     const std::string& model_weights_path) {
-  // video preprocessor args
-  JsonReader video_preprocess_reader;
-  const std::string video_preprocess_file_path =
-      model_weights_path + "/video_preprocessor_config.json";
-  if (video_preprocess_reader.parse(video_preprocess_file_path)) {
-    LOG(INFO) << "Success to parse video preprocess args file: "
-              << video_preprocess_file_path;
-
-    args_.mm_video_shortest_edge() =
-        video_preprocess_reader.value_or<int>("size.shortest_edge", 0);
-
-    args_.mm_video_longest_edge() =
-        video_preprocess_reader.value_or<int>("size.longest_edge", 0);
-
-    const auto& video_prerocess_data = video_preprocess_reader.data();
-    if (video_preprocess_reader.contains("image_mean")) {
-      args_.mm_video_normalize_mean() =
-          video_prerocess_data["image_mean"].get<std::vector<double>>();
-    }
-
-    if (video_preprocess_reader.contains("image_std")) {
-      args_.mm_video_normalize_std() =
-          video_prerocess_data["image_std"].get<std::vector<double>>();
-    }
-    args_.mm_video_patch_size() =
-        video_preprocess_reader.value_or<int>("patch_size", 0);
-
-    args_.mm_video_temporal_patch_size() =
-        video_preprocess_reader.value_or<int>("temporal_patch_size", 0);
-
-    args_.mm_video_merge_size() =
-        video_preprocess_reader.value_or<int>("merge_size", 0);
-
-    args_.mm_video_do_rescale() =
-        video_preprocess_reader.value_or<bool>("do_rescale", false);
-  }
-
-  return true;
+  return HFModelConfigLoader::load_video_preprocessor_args(model_weights_path,
+                                                           &args_);
 }
 
 }  // namespace xllm

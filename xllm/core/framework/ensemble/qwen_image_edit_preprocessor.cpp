@@ -32,7 +32,6 @@ limitations under the License.
 #include "core/framework/multimodal/mm_type.h"
 #include "core/framework/tokenizer/tokenizer_args.h"
 #include "core/framework/tokenizer/tokenizer_factory.h"
-#include "models/model_registry.h"
 #include "processors/multimodal_processor.h"
 #include "processors/transforms.h"
 
@@ -90,7 +89,7 @@ torch::Tensor vae_resize(const torch::Tensor& image) {
 }  // namespace
 
 QwenImageEditPreprocessor::QwenImageEditPreprocessor(
-    std::unique_ptr<MultimodalProcessor> multimodal_processor)
+    std::unique_ptr<MultimodalProcessorBase> multimodal_processor)
     : multimodal_processor_(std::move(multimodal_processor)) {}
 
 QwenImageEditPreprocessor::~QwenImageEditPreprocessor() = default;
@@ -103,33 +102,33 @@ NodePayload QwenImageEditPreprocessor::preprocess(
   torch::Tensor encode_image = vae_resize(input.image);
   MMInput mm_input = build_mm_input(encode_image);
   MMData mm_data;
-  CHECK(multimodal_processor_->process_mm_input(mm_input, mm_data))
+  CHECK(multimodal_processor_->process_multimodal(mm_input, mm_data))
       << "Failed to process image input.";
 
-  const std::string prompt =
+  std::string prompt =
       std::string(kPromptPrefix) + input.prompt + kPromptSuffix;
-  PreprocessOutput prompt_output;
-  CHECK(multimodal_processor_->preprocess(prompt, mm_data, prompt_output))
+  MMData prompt_mm_data = mm_data;
+  std::vector<int32_t> prompt_tokens;
+  CHECK(multimodal_processor_->process_prompt(
+      prompt, prompt_mm_data, prompt_tokens))
       << "Failed to preprocess prompt.";
 
-  const std::string negative_prompt =
+  std::string negative_prompt =
       std::string(kPromptPrefix) + input.negative_prompt + kPromptSuffix;
-  PreprocessOutput neg_output;
-  CHECK(multimodal_processor_->preprocess(negative_prompt, mm_data, neg_output))
+  MMData negative_prompt_mm_data = mm_data;
+  std::vector<int32_t> negative_prompt_tokens;
+  CHECK(multimodal_processor_->process_prompt(
+      negative_prompt, negative_prompt_mm_data, negative_prompt_tokens))
       << "Failed to preprocess negative_prompt.";
 
   NodePayload payload;
-  std::vector<int32_t> prompt_tokens(prompt_output.prompt_tokens.begin(),
-                                     prompt_output.prompt_tokens.end());
-  std::vector<int32_t> neg_tokens(neg_output.prompt_tokens.begin(),
-                                  neg_output.prompt_tokens.end());
-
-  CHECK(payload.set(kPayloadFieldPrompt, prompt_output.prompt));
+  CHECK(payload.set(kPayloadFieldPrompt, prompt));
   CHECK(payload.set(kPayloadFieldPromptTokens, prompt_tokens));
-  CHECK(payload.set(kPayloadFieldPromptMmData, prompt_output.mm_data));
-  CHECK(payload.set(kPayloadFieldNegativePrompt, neg_output.prompt));
-  CHECK(payload.set(kPayloadFieldNegativePromptTokens, neg_tokens));
-  CHECK(payload.set(kPayloadFieldNegativePromptMmData, neg_output.mm_data));
+  CHECK(payload.set(kPayloadFieldPromptMmData, prompt_mm_data));
+  CHECK(payload.set(kPayloadFieldNegativePrompt, negative_prompt));
+  CHECK(payload.set(kPayloadFieldNegativePromptTokens, negative_prompt_tokens));
+  CHECK(
+      payload.set(kPayloadFieldNegativePromptMmData, negative_prompt_mm_data));
   CHECK(payload.set(kPayloadFieldImage, input.image.cpu().contiguous()));
   return payload;
 }
@@ -160,27 +159,14 @@ std::unique_ptr<QwenImageEditPreprocessor> create_qwen_image_edit_preprocessor(
                                                           &model_args))
       << "Failed to load video preprocessor args from " << processor_dir;
 
-  auto tokenizer =
+  std::unique_ptr<Tokenizer> tokenizer =
       TokenizerFactory::create_tokenizer(text_encoder_dir, tokenizer_args);
   CHECK(tokenizer != nullptr)
       << "Failed to create tokenizer from " << text_encoder_dir;
 
-  auto input_processor_factory =
-      ModelRegistry::get_multimodal_input_processor_factory(
-          model_args.model_type());
-  auto prompt_processor_factory =
-      ModelRegistry::get_prompt_processor_factory(model_args.model_type());
-  CHECK(input_processor_factory != nullptr)
-      << "Missing multimodal input processor factory for "
-      << model_args.model_type();
-  CHECK(prompt_processor_factory != nullptr)
-      << "Missing prompt processor factory for " << model_args.model_type();
-
-  std::unique_ptr<MultimodalProcessor> multimodal_processor =
-      CreateMultimodalProcessor(input_processor_factory(model_args),
-                                prompt_processor_factory(model_args),
-                                tokenizer_args,
-                                std::move(tokenizer));
+  std::shared_ptr<Tokenizer> shared_tokenizer(std::move(tokenizer));
+  std::unique_ptr<MultimodalProcessorBase> multimodal_processor =
+      create_multimodal_processor(model_args, std::move(shared_tokenizer));
   CHECK(multimodal_processor != nullptr)
       << "Failed to create multimodal processor for "
       << model_args.model_type();

@@ -31,11 +31,13 @@ cc_library(
   NAME
     model_loader
   HDRS
+    hf_model_config_loader.h
     hf_model_loader.h
     dit_model_context.h
     dit_model_loader.h
     model_loader.h
   SRCS
+    hf_model_config_loader.cpp
     hf_model_loader.cpp
     dit_model_context.cpp
     dit_model_loader.cpp
