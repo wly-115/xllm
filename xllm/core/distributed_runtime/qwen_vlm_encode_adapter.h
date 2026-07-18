@@ -1,0 +1,37 @@
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://github.com/jd-opensource/xllm/blob/main/LICENSE
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#pragma once
+
+#include "core/distributed_runtime/engine_data_adapter.h"
+#include "core/framework/model/model_args.h"
+
+namespace xllm {
+
+class QwenVlmEncodeAdapter final : public ArEngineDataAdapter {
+ public:
+  explicit QwenVlmEncodeAdapter(const ModelArgs& model_args);
+
+  std::vector<std::shared_ptr<Request>> build_requests(
+      const NodeData& input) override;
+
+  NodeData convert_output(const NodeData& input,
+                          const std::vector<RequestOutput>& outputs) override;
+
+ private:
+  const ModelArgs& model_args_;
+};
+
+}  // namespace xllm
