@@ -96,6 +96,88 @@ cc_library(
     proto::xllm_proto
 )
 
+cc_library(
+  NAME
+    ensemble_node_ready_service
+  HDRS
+    ensemble_node_ready_service.h
+  SRCS
+    ensemble_node_ready_service.cpp
+  DEPS
+    absl::time
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(ensemble_node_ready_service PRIVATE brpc protobuf::libprotobuf)
+
+cc_library(
+  NAME
+    node
+  HDRS
+    node.h
+  SRCS
+    node.cpp
+  DEPS
+    absl::flat_hash_map
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(node PRIVATE brpc protobuf::libprotobuf)
+
+cc_library(
+  NAME
+    engine_service
+  HDRS
+    engine_data_adapter.h
+    engine_service.h
+    engine_service_base.h
+    ar_engine_service.h
+    dit_engine_service.h
+    qwen_image_edit_dit_adapter.h
+    qwen_vlm_encode_adapter.h
+  SRCS
+    engine_service_base.cpp
+    qwen_image_edit_dit_adapter.cpp
+    qwen_vlm_encode_adapter.cpp
+  DEPS
+    :common
+    :distributed_runtime
+    :ensemble_protocol
+    :graph_config
+    :node
+    :node_payload
+    :request
+    :runtime
+    :util
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(engine_service PRIVATE brpc protobuf::libprotobuf)
+
+cc_library(
+  NAME
+    engine_server
+  HDRS
+    engine_server.h
+  SRCS
+    engine_server.cpp
+  DEPS
+    :common
+    :distributed_runtime
+    :engine_service
+    :runtime
+    :engine_config
+    :graph_config
+    :xllm_server
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(engine_server PRIVATE brpc protobuf::libprotobuf)
+
 target_link_libraries(worker_service PRIVATE brpc leveldb::leveldb protobuf::libprotobuf)
 
 cc_library(

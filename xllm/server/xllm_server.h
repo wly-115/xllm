@@ -38,6 +38,9 @@ class XllmServer final {
   bool start(std::shared_ptr<WorkerService> service, const std::string& addr);
   bool start(std::shared_ptr<XTensorDistService> service,
              const std::string& addr);
+  bool start(google::protobuf::Service* service,
+             const std::string& addr,
+             const std::string& server_name);
 
   void run();
   void stop();

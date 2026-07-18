@@ -1,5 +1,4 @@
-/* Copyright 2025-2026 The xLLM Authors.
-Copyright 2024 The ScaleLLM Authors. All Rights Reserved.
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,29 +15,13 @@ limitations under the License.
 
 #pragma once
 
-#include <absl/time/time.h>
-
-#include <cstdint>
+#include "core/distributed_runtime/engine.h"
+#include "core/distributed_runtime/engine_service.h"
+#include "core/framework/request/request.h"
+#include "core/framework/request/request_output.h"
 
 namespace xllm {
 
-class Timer final {
- public:
-  Timer();
-
-  // reset the timer
-  void reset();
-
-  // get the elapsed time.
-  double elapsed_seconds() const;
-  double elapsed_milliseconds() const;
-  double elapsed_microseconds() const;
-
-  static int64_t now_milliseconds();
-
- private:
-  // the start time of the timer
-  absl::Time start_;
-};
+using ArEngineService = EngineService<Engine, Request, RequestOutput>;
 
 }  // namespace xllm

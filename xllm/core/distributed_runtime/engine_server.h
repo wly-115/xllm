@@ -1,0 +1,56 @@
+/* Copyright 2026 The xLLM Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://github.com/jd-opensource/xllm/blob/main/LICENSE
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#pragma once
+
+#include <atomic>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <thread>
+
+#include "core/framework/ensemble/engine_config.h"
+
+namespace xllm {
+
+class Engine;
+class EngineServiceBase;
+
+class EngineServer final {
+ public:
+  explicit EngineServer(const NodeRuntimePlan& runtime_plan);
+  ~EngineServer();
+
+  bool exposes_service() const;
+  void run();
+
+ private:
+  std::unique_ptr<Engine> create_engine();
+  std::unique_ptr<EngineServiceBase> create_service();
+  void start_service();
+  void start_scheduler();
+  void stop_scheduler();
+  void register_ready();
+  void stop_service_endpoint();
+
+  NodeRuntimePlan runtime_plan_;
+  std::unique_ptr<Engine> engine_;
+  std::unique_ptr<EngineServiceBase> service_;
+  std::string service_server_name_;
+  std::atomic<bool> stop_scheduler_{false};
+  std::thread scheduler_thread_;
+};
+
+}  // namespace xllm

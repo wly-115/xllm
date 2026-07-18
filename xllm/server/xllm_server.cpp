@@ -257,6 +257,12 @@ bool XllmServer::start(std::shared_ptr<XTensorDistService> service,
                        "XTensorDist");
 }
 
+bool XllmServer::start(google::protobuf::Service* service,
+                       const std::string& addr,
+                       const std::string& server_name) {
+  return create_server(service, addr, -1, server_name);
+}
+
 bool XllmServer::create_server(google::protobuf::Service* service,
                                const std::string& addr,
                                int port,

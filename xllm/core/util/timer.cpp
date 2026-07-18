@@ -40,4 +40,6 @@ double Timer::elapsed_milliseconds() const {
 double Timer::elapsed_microseconds() const {
   return absl::ToDoubleMicroseconds(absl::Now() - start_);
 }
+
+int64_t Timer::now_milliseconds() { return absl::ToUnixMillis(absl::Now()); }
 }  // namespace xllm
