@@ -128,6 +128,63 @@ target_link_libraries(node PRIVATE brpc protobuf::libprotobuf)
 
 cc_library(
   NAME
+    ensemble_engine
+  HDRS
+    ensemble_engine.h
+  SRCS
+    ensemble_engine.cpp
+  DEPS
+    :ensemble_protocol
+    :graph_config
+    :node
+    :qwen_image_edit_preprocessor
+    :request
+    :util
+    absl::flat_hash_map
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(ensemble_engine PRIVATE brpc protobuf::libprotobuf)
+
+cc_library(
+  NAME
+    ensemble_result_service
+  HDRS
+    ensemble_result_service.h
+  SRCS
+    ensemble_result_service.cpp
+  DEPS
+    :ensemble_engine
+    :ensemble_protocol
+    glog::glog
+    proto::xllm_proto
+)
+
+target_link_libraries(ensemble_result_service PRIVATE brpc protobuf::libprotobuf)
+
+cc_library(
+  NAME
+    omni_master
+  HDRS
+    omni_master.h
+  SRCS
+    omni_master.cpp
+  DEPS
+    :ensemble_engine
+    :ensemble_node_ready_service
+    :ensemble_protocol
+    :ensemble_result_service
+    :graph_config
+    :node_payload
+    :request
+    :util
+    :xllm_server
+    glog::glog
+)
+
+cc_library(
+  NAME
     engine_service
   HDRS
     engine_data_adapter.h
