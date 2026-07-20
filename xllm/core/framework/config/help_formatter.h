@@ -76,11 +76,14 @@ class HelpFormatter {
   static std::string generate_help() {
     std::ostringstream oss;
 
-    oss << "USAGE: xllm --model <PATH> [OPTIONS]\n\n";
+    oss << "USAGE: xllm (--model <PATH> | --omni_graph_config_path <PATH>) "
+           "[OPTIONS]\n\n";
 
     oss << "REQUIRED OPTIONS:\n";
-    oss << "  --model <PATH>: Path to the model directory. This is "
-           "the only required flag.\n\n";
+    oss << "  --model <PATH>: Path to the model directory for standard "
+           "serving.\n";
+    oss << "  --omni_graph_config_path <PATH>: Path to the Omni graph YAML "
+           "for ensemble serving.\n\n";
 
     oss << "HELP OPTIONS:\n";
     oss << "  -h, --help: Display this help message and exit.\n\n";
@@ -119,7 +122,9 @@ class HelpFormatter {
   static void print_help() { std::cout << generate_help(); }
 
   static void print_usage() {
-    std::cout << "USAGE: xllm --model <PATH> [OPTIONS]\n";
+    std::cout
+        << "USAGE: xllm (--model <PATH> | --omni_graph_config_path <PATH>) "
+           "[OPTIONS]\n";
     std::cout << "Try 'xllm --help' for more information.\n";
   }
 

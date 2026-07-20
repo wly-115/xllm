@@ -20,11 +20,11 @@ limitations under the License.
 #include <functional>
 #include <unordered_map>
 
-#include "api_service.h"
+#include "api_service/api_service.h"
 #include "api_service/serving_mode.h"
-#include "core/common/global_flags.h"
 #include "core/distributed_runtime/dit_master.h"
 #include "core/distributed_runtime/llm_master.h"
+#include "core/distributed_runtime/omni_master.h"
 #include "core/distributed_runtime/rec_master.h"
 #include "core/distributed_runtime/vlm_master.h"
 #include "core/framework/config/model_config.h"
@@ -45,8 +45,24 @@ std::unique_ptr<T> create_service_impl(
 void ServiceImplFactory::create(
     APIService* service,
     Master* master,
+    OmniMaster* omni_master,
     const std::vector<std::string>& model_names,
     const std::vector<std::string>& model_versions) {
+  if (master == nullptr) {
+    CHECK(omni_master != nullptr) << "omni master cannot be null.";
+    service->image_generation_service_impl_ =
+        std::make_unique<ImageGenerationServiceImpl>(
+            /*dit_master=*/nullptr, omni_master, model_names);
+
+    CHECK_EQ(model_names.size(), model_versions.size())
+        << "Models and model_versions size mismatch: model_names.size()="
+        << model_names.size()
+        << ", model_versions.size()=" << model_versions.size();
+    service->models_service_impl_ =
+        std::make_unique<ModelsServiceImpl>(model_names, model_versions);
+    return;
+  }
+
   using InitFn = std::function<void(
       APIService*, Master*, const std::vector<std::string>&)>;
 
@@ -90,7 +106,8 @@ void ServiceImplFactory::create(
           const std::vector<std::string>& models) {
          auto* dit_master = dynamic_cast<DiTMaster*>(master);
          self->image_generation_service_impl_ =
-             std::make_unique<ImageGenerationServiceImpl>(dit_master, models);
+             std::make_unique<ImageGenerationServiceImpl>(
+                 dit_master, /*omni_master=*/nullptr, models);
          self->audio_generation_service_impl_ =
              std::make_unique<AudioGenerationServiceImpl>(dit_master, models);
          self->video_generation_service_impl_ =

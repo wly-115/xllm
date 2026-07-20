@@ -60,13 +60,24 @@ constexpr const char* kApiServiceRoutes =
 
 constexpr const char* kForkOnlyRoute = "fork_master => ForkMasterHttp";
 
+constexpr const char* kOmniApiServiceRoutes =
+    "v1/models => ModelsHttp,"
+    "v1/image/generation => ImageGenerationHttp";
+
 struct ApiRouteBinding {
   const char* name;
   bool (*enabled)();
   const char* routes;
 };
 
-bool is_master_node() {
+bool is_omni_master_node() {
+  return ::xllm::DistributedConfig::get_instance().node_rank() == 0 &&
+         !::xllm::ServiceConfig::get_instance()
+              .omni_graph_config_path()
+              .empty();
+}
+
+bool is_standard_master_node() {
   return ::xllm::DistributedConfig::get_instance().node_rank() == 0;
 }
 
@@ -76,8 +87,9 @@ bool is_xtensor_node() {
 }
 
 const char* get_api_service_routes_for_current_mode() {
-  static constexpr std::array<ApiRouteBinding, 2> kBindings = {{
-      {"master_node", &is_master_node, kApiServiceRoutes},
+  static constexpr std::array<ApiRouteBinding, 3> kBindings = {{
+      {"omni_master_node", &is_omni_master_node, kOmniApiServiceRoutes},
+      {"master_node", &is_standard_master_node, kApiServiceRoutes},
       {"xtensor_node", &is_xtensor_node, kForkOnlyRoute},
   }};
   for (const auto& binding : kBindings) {

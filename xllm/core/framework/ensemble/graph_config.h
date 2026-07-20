@@ -31,7 +31,7 @@ struct NodeConfig {
   std::string name;
   std::string backend;
   std::string adapter;
-  std::vector<std::string> deps;
+  std::vector<std::string> next_nodes;
   std::map<int32_t, int32_t> ranks;
   std::unordered_map<std::string, std::string> engine_config;
   std::string endpoint_target;

@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "api_service.h"
+#include "api_service/api_service.h"
 
 #include <glog/logging.h>
 #include <google/protobuf/util/json_util.h>
@@ -22,11 +22,12 @@ limitations under the License.
 
 #include <filesystem>
 
+#include "api_service/call.h"
 #include "api_service/chat_json_parser.h"
 #include "api_service/completion_json_parser.h"
 #include "api_service/service_impl_factory.h"
 #include "api_service/serving_mode.h"
-#include "call.h"
+#include "api_service/xllm_metrics.h"
 #include "chat.pb.h"
 #include "common.pb.h"
 #include "completion.pb.h"
@@ -43,9 +44,7 @@ limitations under the License.
 #include "embedding.pb.h"
 #include "image_generation.pb.h"
 #include "models.pb.h"
-#include "service_impl_factory.h"
 #include "video_generation.pb.h"
-#include "xllm_metrics.h"
 namespace xllm {
 
 namespace {
@@ -109,14 +108,21 @@ void process_typed_brpc_request(std::unique_ptr<Service>& service_impl,
 
 APIService::APIService(Master* master,
                        const std::vector<std::string>& model_names,
-                       const std::vector<std::string>& model_versions)
+                       const std::vector<std::string>& model_versions,
+                       OmniMaster* omni_master)
     : master_(master) {
-  set_model_master(model_names[0], master);
+  CHECK(!model_names.empty()) << "model names cannot be empty.";
+  if (master != nullptr) {
+    set_model_master(model_names[0], master);
+  }
   if (::xllm::DistributedConfig::get_instance().node_rank() != 0) {
     return;
   }
-  ServiceImplFactory::create(this, master, model_names, model_versions);
-  register_chat_completions_handler();
+  ServiceImplFactory::create(
+      this, master, omni_master, model_names, model_versions);
+  if (master != nullptr) {
+    register_chat_completions_handler();
+  }
 }
 
 void APIService::set_model_master(const std::string& model_id, Master* master) {

@@ -22,6 +22,7 @@ namespace xllm {
 
 class APIService;
 class Master;
+class OmniMaster;
 
 // Creates all service-impl instances that an APIService needs for the active
 // engine type.  Adding a new engine type only requires one new entry in the
@@ -30,6 +31,7 @@ class ServiceImplFactory {
  public:
   static void create(APIService* service,
                      Master* master,
+                     OmniMaster* omni_master,
                      const std::vector<std::string>& model_names,
                      const std::vector<std::string>& model_versions);
 };

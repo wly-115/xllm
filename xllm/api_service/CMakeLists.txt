@@ -53,12 +53,14 @@ cc_library(
     embedding_output_builder.cpp
   DEPS
     :master
+    :omni_master
     :chat_template
     :util
     glog::glog
     proto::xllm_proto
     absl::flat_hash_set
     absl::random_random
+    absl::time
     :function_call
     :reasoning
     torch

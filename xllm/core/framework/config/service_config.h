@@ -50,7 +50,9 @@ class ServiceConfig final {
          "max_concurrent_requests",
          "num_request_handling_threads",
          "num_response_handling_threads",
-         "health_check_interval_ms"}};
+         "health_check_interval_ms",
+         "omni_master_addr",
+         "omni_graph_config_path"}};
     return kOptionCategory;
   }
 
@@ -73,6 +75,10 @@ class ServiceConfig final {
   PROPERTY(int32_t, num_response_handling_threads) = 4;
 
   PROPERTY(int32_t, health_check_interval_ms) = 3000;
+
+  PROPERTY(std::string, omni_master_addr) = "127.0.0.1:19890";
+
+  PROPERTY(std::string, omni_graph_config_path);
 };
 
 }  // namespace xllm

@@ -15,35 +15,20 @@ limitations under the License.
 
 #include "core/framework/ensemble/engine_config.h"
 
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstdlib>
 #include <string>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "core/common/global_flags.h"
 #include "core/common/options.h"
+#include "core/framework/config/config_utils.h"
 #include "core/platform/device_name_utils.h"
 #include "core/util/net.h"
 
 namespace xllm {
 namespace {
-
-constexpr uint64_t kMiB = 1024 * 1024;
-
-void apply_engine_config(
-    const std::unordered_map<std::string, std::string>& engine_config) {
-  for (const auto& [name, value] : engine_config) {
-    const std::string result =
-        google::SetCommandLineOption(name.c_str(), value.c_str());
-    if (result.empty()) {
-      LOG(WARNING) << "Failed to set engine config flag: " << name << "="
-                   << value;
-    }
-  }
-}
 
 const NodeConfig& find_node_config(const GraphConfig& config,
                                    int32_t global_rank) {
@@ -54,6 +39,7 @@ const NodeConfig& find_node_config(const GraphConfig& config,
   }
   LOG(FATAL) << "graph global rank does not belong to any node: "
              << global_rank;
+  std::abort();
 }
 
 Options build_options(int32_t local_rank, int32_t world_size) {
@@ -80,6 +66,8 @@ Options build_options(int32_t local_rank, int32_t world_size) {
       .max_cache_size(FLAGS_max_cache_size)
       .max_memory_utilization(FLAGS_max_memory_utilization)
       .enable_prefix_cache(FLAGS_enable_prefix_cache)
+      .max_encoder_cache_size(FLAGS_max_encoder_cache_size)
+      .max_linear_state_cache_slots(FLAGS_max_linear_state_cache_slots)
       .max_tokens_per_batch(FLAGS_max_tokens_per_batch)
       .max_seqs_per_batch(FLAGS_max_seqs_per_batch)
       .max_tokens_per_chunk_for_prefill(max_tokens_per_chunk_for_prefill)
@@ -108,7 +96,6 @@ Options build_options(int32_t local_rank, int32_t world_size) {
       .enable_prefill_sp(FLAGS_enable_prefill_sp)
       .master_node_addr(FLAGS_master_node_addr)
       .instance_role(InstanceRole(FLAGS_instance_role))
-      .device_ip("")
       .transfer_listen_port(static_cast<uint16_t>(FLAGS_transfer_listen_port))
       .nnodes(world_size)
       .node_rank(local_rank)
@@ -118,6 +105,7 @@ Options build_options(int32_t local_rank, int32_t world_size) {
       .tp_size(FLAGS_tp_size)
       .sp_size(FLAGS_sp_size)
       .cfg_size(FLAGS_cfg_size)
+      .vae_size(static_cast<int32_t>(FLAGS_vae_size))
       .instance_name(FLAGS_host + ":" + std::to_string(FLAGS_port))
       .enable_disagg_pd(FLAGS_enable_disagg_pd)
       .enable_pd_ooc(FLAGS_enable_pd_ooc)
@@ -131,15 +119,12 @@ Options build_options(int32_t local_rank, int32_t world_size) {
       .reasoning_parser(FLAGS_reasoning_parser)
       .priority_strategy(FLAGS_priority_strategy)
       .enable_online_preempt_offline(FLAGS_enable_online_preempt_offline)
-      .enable_cache_upload(
-          (FLAGS_enable_service_routing || FLAGS_enable_disagg_pd) &&
-          FLAGS_enable_prefix_cache && FLAGS_enable_cache_upload)
       .host_blocks_factor(FLAGS_host_blocks_factor)
       .enable_kvcache_store(FLAGS_enable_kvcache_store &&
                             FLAGS_enable_prefix_cache &&
                             (FLAGS_host_blocks_factor > 1.0))
       .prefetch_timeout(FLAGS_prefetch_timeout)
-      .prefetch_bacth_size(FLAGS_prefetch_bacth_size)
+      .prefetch_batch_size(FLAGS_prefetch_batch_size)
       .layers_wise_copy_batchs(FLAGS_layers_wise_copy_batchs)
       .store_protocol(FLAGS_store_protocol)
       .store_master_server_address(FLAGS_store_master_server_address)
@@ -154,12 +139,16 @@ Options build_options(int32_t local_rank, int32_t world_size) {
       .disable_ttft_profiling(FLAGS_disable_ttft_profiling)
       .enable_forward_interruption(FLAGS_enable_forward_interruption)
       .enable_graph(FLAGS_enable_graph)
+      .enable_graph_mode_decode_no_padding(
+          FLAGS_enable_graph_mode_decode_no_padding)
+      .enable_prefill_piecewise_graph(FLAGS_enable_prefill_piecewise_graph)
+      .max_tokens_for_graph_mode(FLAGS_max_tokens_for_graph_mode)
       .max_global_ttft_ms(FLAGS_max_global_ttft_ms)
       .max_global_tpot_ms(FLAGS_max_global_tpot_ms)
       .max_requests_per_batch(FLAGS_max_requests_per_batch)
       .enable_shm(FLAGS_enable_shm)
-      .input_shm_size(FLAGS_input_shm_size * kMiB)
-      .output_shm_size(FLAGS_output_shm_size * kMiB)
+      .input_shm_size(FLAGS_input_shm_size * 1024 * 1024)
+      .output_shm_size(FLAGS_output_shm_size * 1024 * 1024)
       .beam_width(FLAGS_beam_width)
       .kv_cache_dtype(FLAGS_kv_cache_dtype)
       .rec_worker_max_concurrency(
@@ -188,6 +177,8 @@ runtime::Options build_runtime_options(const Options& options) {
       .max_cache_size(options.max_cache_size())
       .max_memory_utilization(options.max_memory_utilization())
       .enable_prefix_cache(options.enable_prefix_cache())
+      .max_encoder_cache_size(options.max_encoder_cache_size())
+      .max_linear_state_cache_slots(options.max_linear_state_cache_slots())
       .num_speculative_tokens(options.num_speculative_tokens())
       .speculative_algorithm(options.speculative_algorithm())
       .speculative_suffix_cache_max_depth(
@@ -214,6 +205,7 @@ runtime::Options build_runtime_options(const Options& options) {
       .tp_size(options.tp_size())
       .sp_size(options.sp_size())
       .cfg_size(options.cfg_size())
+      .vae_size(options.vae_size())
       .enable_schedule_overlap(options.enable_schedule_overlap())
       .enable_chunked_prefill(options.enable_chunked_prefill())
       .enable_prefill_sp(options.enable_prefill_sp())
@@ -232,14 +224,13 @@ runtime::Options build_runtime_options(const Options& options) {
       .enable_forward_interruption(options.enable_forward_interruption())
       .priority_strategy(options.priority_strategy())
       .enable_online_preempt_offline(options.enable_online_preempt_offline())
-      .enable_cache_upload(options.enable_cache_upload())
       .host_blocks_factor(options.host_blocks_factor())
       .enable_kvcache_store(options.enable_kvcache_store())
       .store_protocol(options.store_protocol())
       .store_master_server_address(options.store_master_server_address())
       .store_metadata_server(options.store_metadata_server())
       .store_local_hostname(options.store_local_hostname())
-      .prefetch_bacth_size(options.prefetch_bacth_size())
+      .prefetch_batch_size(options.prefetch_batch_size())
       .layers_wise_copy_batchs(options.layers_wise_copy_batchs())
       .max_requests_per_batch(options.max_requests_per_batch())
       .enable_shm(options.enable_shm())
@@ -247,6 +238,10 @@ runtime::Options build_runtime_options(const Options& options) {
       .output_shm_size(options.output_shm_size())
       .is_local(options.is_local())
       .enable_graph(options.enable_graph())
+      .enable_graph_mode_decode_no_padding(
+          options.enable_graph_mode_decode_no_padding())
+      .enable_prefill_piecewise_graph(options.enable_prefill_piecewise_graph())
+      .max_tokens_for_graph_mode(options.max_tokens_for_graph_mode())
       .beam_width(options.beam_width())
       .kv_cache_dtype(options.kv_cache_dtype())
       .rec_worker_max_concurrency(options.rec_worker_max_concurrency());
@@ -255,10 +250,16 @@ runtime::Options build_runtime_options(const Options& options) {
 
 }  // namespace
 
+void apply_node_engine_config(const GraphConfig& config,
+                              int32_t graph_global_rank) {
+  const NodeConfig& node = find_node_config(config, graph_global_rank);
+  config::set_runtime_config_overrides(node.engine_config);
+}
+
 NodeRuntimePlan build_node_runtime_plan(const GraphConfig& config,
-                                        int32_t global_rank) {
+                                        int32_t global_rank,
+                                        const std::string& ready_target) {
   const NodeConfig& node = find_node_config(config, global_rank);
-  apply_engine_config(node.engine_config);
 
   const int32_t local_rank = node.ranks.at(global_rank);
   const int32_t world_size = static_cast<int32_t>(node.ranks.size());
@@ -269,6 +270,7 @@ NodeRuntimePlan build_node_runtime_plan(const GraphConfig& config,
   runtime_plan.adapter = node.adapter;
   runtime_plan.service_target = node.endpoint_target;
   runtime_plan.result_target = config.result_target;
+  runtime_plan.ready_target = ready_target;
   runtime_plan.final_output = node.final_output;
   runtime_plan.timeout_ms = node.timeout_ms;
   runtime_plan.runtime_options = build_runtime_options(options);

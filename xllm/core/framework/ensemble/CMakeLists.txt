@@ -11,7 +11,7 @@ cc_library(
   DEPS
     absl::flat_hash_map
     glog::glog
-    yaml-cpp
+    yaml-cpp::yaml-cpp
 )
 
 cc_library(
@@ -75,6 +75,7 @@ cc_library(
   SRCS
     engine_config.cpp
   DEPS
+    :config
     graph_config
     :common
     :util
@@ -89,5 +90,15 @@ cc_test(
     graph_config_test.cpp
   DEPS
     graph_config
+    GTest::gtest_main
+)
+
+cc_test(
+  NAME
+    node_payload_test
+  SRCS
+    node_payload_test.cpp
+  DEPS
+    :node_payload
     GTest::gtest_main
 )

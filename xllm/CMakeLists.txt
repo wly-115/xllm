@@ -81,8 +81,12 @@ else()
       xllm.cpp
     DEPS
       :config
+      :engine_config
+      :engine_server
+      :graph_config
       :xllm_server
       :master
+      :omni_master
       absl::strings
       Boost::serialization
       gflags::gflags

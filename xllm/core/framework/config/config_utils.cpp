@@ -26,6 +26,8 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <system_error>
+#include <unordered_map>
+#include <utility>
 
 #include "core/framework/config/beam_search_config.h"
 #include "core/framework/config/disagg_pd_config.h"
@@ -83,25 +85,79 @@ std::optional<JsonReader>& parsed_json_config() {
   return json_config;
 }
 
+std::unordered_map<std::string, std::string>& runtime_config_overrides() {
+  static std::unordered_map<std::string, std::string> overrides;
+  return overrides;
+}
+
+nlohmann::json flag_value_to_json(
+    const google::CommandLineFlagInfo& flag_info) {
+  if (flag_info.type == "string") {
+    return flag_info.current_value;
+  }
+  if (flag_info.type == "bool") {
+    return flag_info.current_value == "true";
+  }
+  return nlohmann::json::parse(flag_info.current_value);
+}
+
+void apply_runtime_config_flags() {
+  for (const auto& [name, value] : runtime_config_overrides()) {
+    google::CommandLineFlagInfo flag_info;
+    if (!google::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
+      LOG(WARNING) << "Ignore unknown runtime config override: " << name;
+      continue;
+    }
+    google::SetCommandLineOption(name.c_str(), value.c_str());
+  }
+}
+
+void apply_runtime_config_overrides(nlohmann::json* config_json) {
+  CHECK(config_json != nullptr) << "config json cannot be null.";
+  for (const auto& [name, value] : runtime_config_overrides()) {
+    google::CommandLineFlagInfo flag_info;
+    if (!google::GetCommandLineFlagInfo(name.c_str(), &flag_info)) {
+      LOG(WARNING) << "Ignore unknown runtime config override: " << name;
+      continue;
+    }
+
+    google::GetCommandLineFlagInfo(name.c_str(), &flag_info);
+    try {
+      (*config_json)[name] = flag_value_to_json(flag_info);
+    } catch (const nlohmann::json::exception& exception) {
+      LOG(FATAL) << "Failed to parse runtime config override " << name << "="
+                 << value << ", error: " << exception.what();
+    }
+  }
+}
+
 void load_parsed_json_config() {
   const std::string& config_path = parsed_json_config_path();
-  if (config_path.empty()) {
-    return;
-  }
-
-  JsonReader reader;
-  try {
-    if (!reader.parse(config_path)) {
-      LOG(ERROR) << "Failed to load JSON config file: " << config_path;
-      return;
+  nlohmann::json config_json = nlohmann::json::object();
+  bool has_config = false;
+  if (!config_path.empty()) {
+    JsonReader reader;
+    try {
+      if (!reader.parse(config_path)) {
+        LOG(ERROR) << "Failed to load JSON config file: " << config_path;
+      } else {
+        config_json = reader.data();
+        has_config = true;
+      }
+    } catch (const std::exception& exception) {
+      LOG(ERROR) << "Failed to parse JSON config file: " << config_path
+                 << ", error: " << exception.what();
     }
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to parse JSON config file: " << config_path
-               << ", error: " << e.what();
+  }
+
+  apply_runtime_config_overrides(&config_json);
+  if (!has_config && runtime_config_overrides().empty()) {
     return;
   }
 
-  parsed_json_config() = reader;
+  JsonReader merged_reader;
+  merged_reader.parse_text(config_json.dump());
+  parsed_json_config() = std::move(merged_reader);
 }
 
 void reset_parsed_json_config_if_path_changed() {
@@ -169,6 +225,15 @@ const std::optional<JsonReader>& get_parsed_json_config() {
   reset_parsed_json_config_if_path_changed();
   std::call_once(*parsed_json_config_once(), load_parsed_json_config);
   return parsed_json_config();
+}
+
+void set_runtime_config_overrides(
+    const std::unordered_map<std::string, std::string>& overrides) {
+  std::lock_guard<std::mutex> lock(parsed_json_config_mutex());
+  runtime_config_overrides() = overrides;
+  apply_runtime_config_flags();
+  parsed_json_config().reset();
+  parsed_json_config_once() = std::make_unique<std::once_flag>();
 }
 
 void dump_startup_config() {

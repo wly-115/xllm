@@ -18,6 +18,7 @@ limitations under the License.
 #include <gtest/gtest.h>
 
 #include <string>
+#include <utility>
 
 namespace xllm {
 namespace {
@@ -33,6 +34,7 @@ result_endpoint:
 nodes:
   - name: node0
     adapter: qwen_vlm_encode
+    next: [node1]
     ranks: [0]
     engine_config:
       backend: vlm
@@ -45,7 +47,6 @@ nodes:
       target: node0
   - name: node1
     adapter: qwen_image_edit_dit
-    deps: [node0]
     ranks: [1]
     engine_config:
       backend: dit
@@ -105,7 +106,8 @@ TEST(GraphConfigLoadTest, LoadQwenImageEditConfig) {
   EXPECT_EQ(vlm_node.name, "node0");
   EXPECT_EQ(vlm_node.backend, "vlm");
   EXPECT_EQ(vlm_node.adapter, "qwen_vlm_encode");
-  EXPECT_TRUE(vlm_node.deps.empty());
+  ASSERT_EQ(vlm_node.next_nodes.size(), 1);
+  EXPECT_EQ(vlm_node.next_nodes[0], "node1");
   ASSERT_EQ(vlm_node.ranks.size(), 1);
   EXPECT_EQ(vlm_node.ranks.at(0), 0);
   EXPECT_EQ(vlm_node.engine_config.at("model"), "/path/to/qwen_image_edit_vlm");
@@ -118,8 +120,7 @@ TEST(GraphConfigLoadTest, LoadQwenImageEditConfig) {
   const NodeConfig& dit_node = config.nodes[1];
   EXPECT_EQ(dit_node.backend, "dit");
   EXPECT_EQ(dit_node.adapter, "qwen_image_edit_dit");
-  ASSERT_EQ(dit_node.deps.size(), 1);
-  EXPECT_EQ(dit_node.deps[0], "node0");
+  EXPECT_TRUE(dit_node.next_nodes.empty());
   ASSERT_EQ(dit_node.ranks.size(), 1);
   EXPECT_EQ(dit_node.ranks.at(1), 0);
   EXPECT_EQ(dit_node.endpoint_target, "node1");
@@ -206,18 +207,26 @@ nodes:
   expect_validate_config_from_yaml_fatal(kConfig);
 }
 
-TEST(GraphConfigValidateTest, RejectsUnknownDependency) {
-  constexpr char kConfig[] = R"yaml(
-graph_name: unknown_dep
-nodes:
-  - name: node0
-    deps: [missing]
-    ranks: [0]
-    endpoint:
-      target: node0
-    final_output: true
-)yaml";
-  expect_validate_config_from_yaml_fatal(kConfig);
+TEST(GraphConfigValidateTest, RejectsUnknownNextNode) {
+  GraphConfig config = load_config_or_die(kQwenImageEditConfig);
+  config.nodes[0].next_nodes = {"missing"};
+  expect_validate_config_fatal(config);
+}
+
+TEST(GraphConfigValidateTest, RejectsMultipleDownstreamNodes) {
+  GraphConfig config = load_config_or_die(kQwenImageEditConfig);
+  config.nodes[0].next_nodes = {"node1", "node0"};
+  expect_validate_config_fatal(config);
+}
+
+TEST(GraphConfigValidateTest, RejectsMultipleUpstreamNodes) {
+  GraphConfig config = load_config_or_die(kQwenImageEditConfig);
+  NodeConfig second_root = config.nodes[0];
+  second_root.name = "node2";
+  second_root.ranks = {{2, 0}};
+  second_root.endpoint_target = "node2";
+  config.nodes.emplace_back(std::move(second_root));
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigValidateTest, RejectsMissingFinalOutput) {
@@ -233,21 +242,10 @@ nodes:
 }
 
 TEST(GraphConfigValidateTest, RejectsFinalOutputWithDownstreamNode) {
-  constexpr char kConfig[] = R"yaml(
-graph_name: bad_output_topology
-nodes:
-  - name: node0
-    ranks: [0]
-    endpoint:
-      target: node0
-    final_output: true
-  - name: node1
-    deps: [node0]
-    ranks: [1]
-    endpoint:
-      target: node1
-)yaml";
-  expect_validate_config_from_yaml_fatal(kConfig);
+  GraphConfig config = load_config_or_die(kQwenImageEditConfig);
+  config.nodes[0].final_output = true;
+  config.nodes[1].final_output = false;
+  expect_validate_config_fatal(config);
 }
 
 TEST(GraphConfigLoadTest, RejectsRankOutsideInt32Range) {
@@ -305,26 +303,25 @@ nodes:
 }
 
 TEST(GraphConfigValidateTest, RejectsCyclicGraph) {
+  GraphConfig config = load_config_or_die(kQwenImageEditConfig);
+  config.nodes[1].next_nodes = {"node0"};
+  expect_validate_config_fatal(config);
+}
+
+TEST(GraphConfigLoadTest, RejectsLegacyDepsField) {
   constexpr char kConfig[] = R"yaml(
-graph_name: cycle_graph
+graph_name: legacy_deps
 nodes:
   - name: node0
+    adapter: qwen_vlm_encode
     deps: [node1]
     ranks: [0]
+    engine_config:
+      backend: vlm
     endpoint:
       target: node0
-  - name: node1
-    deps: [node0]
-    ranks: [1]
-    endpoint:
-      target: node1
-  - name: node2
-    ranks: [2]
-    endpoint:
-      target: node2
-    final_output: true
 )yaml";
-  expect_validate_config_from_yaml_fatal(kConfig);
+  expect_load_config_fatal(kConfig);
 }
 
 TEST(GraphConfigLoadTest, BuildsLocalRankLookupFromSortedGlobalRanks) {

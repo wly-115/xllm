@@ -77,6 +77,8 @@ void ServiceConfig::from_flags() {
   XLLM_CONFIG_ASSIGN_FROM_FLAG(num_request_handling_threads);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(num_response_handling_threads);
   XLLM_CONFIG_ASSIGN_FROM_FLAG(health_check_interval_ms);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(omni_master_addr);
+  XLLM_CONFIG_ASSIGN_FROM_FLAG(omni_graph_config_path);
 }
 
 void ServiceConfig::from_json(const JsonReader& json) {
@@ -91,6 +93,8 @@ void ServiceConfig::from_json(const JsonReader& json) {
   XLLM_CONFIG_ASSIGN_FROM_JSON(num_request_handling_threads);
   XLLM_CONFIG_ASSIGN_FROM_JSON(num_response_handling_threads);
   XLLM_CONFIG_ASSIGN_FROM_JSON(health_check_interval_ms);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(omni_master_addr);
+  XLLM_CONFIG_ASSIGN_FROM_JSON(omni_graph_config_path);
 }
 
 void ServiceConfig::append_config_json(
@@ -115,6 +119,10 @@ void ServiceConfig::append_config_json(
       config_json, default_config, num_response_handling_threads);
   APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
       config_json, default_config, health_check_interval_ms);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, omni_master_addr);
+  APPEND_CONFIG_JSON_VALUE_IF_NOT_DEFAULT(
+      config_json, default_config, omni_graph_config_path);
 }
 
 ServiceConfig& ServiceConfig::get_instance() {

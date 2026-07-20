@@ -1,0 +1,42 @@
+# Replace model paths, device lists, and endpoints for the deployment.
+graph_name: qwen-image-edit
+ready_timeout_ms: 60000
+
+preprocessor_config:
+  type: qwen-image-edit
+  model_root: /path/to/qwen-image-edit
+
+result_endpoint:
+  target: 127.0.0.1:18010
+
+nodes:
+  - name: vlm-encode
+    adapter: qwen_vlm_encode
+    next: [dit-generate]
+    ranks: [0, 1]
+    engine_config:
+      backend: vlm
+      model: /path/to/qwen-image-edit/vlm
+      model_id: qwen-image-edit
+      devices: npu:0,npu:1
+      master_node_addr: 127.0.0.1:19881
+      tp_size: 2
+    endpoint:
+      target: 127.0.0.1:18012
+    final_output: false
+    timeout_ms: 30000
+
+  - name: dit-generate
+    adapter: qwen_image_edit_dit
+    ranks: [2, 3]
+    engine_config:
+      backend: dit
+      model: /path/to/qwen-image-edit/dit
+      model_id: qwen-image-edit
+      devices: npu:0,npu:1
+      master_node_addr: 127.0.0.1:19882
+      tp_size: 2
+    endpoint:
+      target: 127.0.0.1:18014
+    final_output: true
+    timeout_ms: 120000

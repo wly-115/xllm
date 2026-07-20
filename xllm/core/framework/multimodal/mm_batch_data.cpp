@@ -240,6 +240,7 @@ bool mmitem_state_to_proto(const xllm::MMItemState& cpp_state,
       XXH3_128BITS_HASH_VALUE_LEN));
   pb_state->set_schedule_data_start_pos(cpp_state.schedule_data().start_pos);
   pb_state->set_schedule_data_end_pos(cpp_state.schedule_data().end_pos);
+  pb_state->set_mm_token_num(cpp_state.mm_token_num());
   return true;
 }
 
@@ -280,6 +281,7 @@ bool proto_to_mmitem_state(const proto::MMItemState& pb_state,
   cpp_state->mutable_schedule_data().start_pos =
       pb_state.schedule_data_start_pos();
   cpp_state->mutable_schedule_data().end_pos = pb_state.schedule_data_end_pos();
+  cpp_state->mutable_mm_token_num() = pb_state.mm_token_num();
 
   return true;
 }

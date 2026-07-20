@@ -20,6 +20,7 @@ limitations under the License.
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 
 #include "core/util/json_reader.h"
 
@@ -30,6 +31,9 @@ JsonReader load_json_file(const std::string& config_path);
 JsonReader parse_json_string(std::string_view config_json);
 
 const std::optional<JsonReader>& get_parsed_json_config();
+
+void set_runtime_config_overrides(
+    const std::unordered_map<std::string, std::string>& overrides);
 
 bool is_flag_specified(const char* flag_name);
 

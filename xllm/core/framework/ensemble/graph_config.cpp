@@ -153,7 +153,10 @@ NodeConfig parse_node(const YAML::Node& node_yaml) {
     LOG(FATAL) << "node.adapter must be a string.";
   }
   node.adapter = node_yaml["adapter"].as<std::string>();
-  node.deps = parse_string_array(node_yaml, "deps");
+  if (node_yaml["deps"]) {
+    LOG(FATAL) << "node.deps is no longer supported; use node.next.";
+  }
+  node.next_nodes = parse_string_array(node_yaml, "next");
   node.ranks = parse_ranks(node_yaml);
   node.engine_config = parse_string_map(node_yaml, "engine_config");
   auto backend_it = node.engine_config.find("backend");
@@ -206,6 +209,7 @@ struct GraphValidationContext {
   std::unordered_set<std::string> node_names;
   std::unordered_set<int32_t> global_ranks;
   std::unordered_map<std::string, std::vector<std::string>> downstream_nodes;
+  std::unordered_map<std::string, int32_t> upstream_counts;
   std::vector<std::string> root_nodes;
   std::vector<std::string> final_nodes;
 };
@@ -244,8 +248,8 @@ void validate_node_runtime_config(const NodeConfig& node) {
   if (node.endpoint_target.empty()) {
     LOG(FATAL) << "node endpoint target cannot be empty: " << node.name;
   }
-  if (node.deps.size() > 1) {
-    LOG(FATAL) << "P0 node supports at most one dependency: " << node.name;
+  if (node.next_nodes.size() > 1) {
+    LOG(FATAL) << "P0 node supports at most one downstream node: " << node.name;
   }
 
   const bool valid_vlm =
@@ -264,30 +268,33 @@ void validate_nodes(const GraphConfig& config,
     validate_node_identity(node, context);
     validate_node_ranks(node, context);
     validate_node_runtime_config(node);
-    if (node.deps.empty()) {
-      context.root_nodes.emplace_back(node.name);
-    }
     if (node.final_output) {
       context.final_nodes.emplace_back(node.name);
     }
   }
 }
 
-void validate_dependencies(const GraphConfig& config,
-                           GraphValidationContext& context) {
+void validate_edges(const GraphConfig& config,
+                    GraphValidationContext& context) {
   for (const NodeConfig& node : config.nodes) {
-    for (const std::string& dep : node.deps) {
-      if (context.node_names.find(dep) == context.node_names.end()) {
-        LOG(FATAL) << "deps references unknown node: " << dep;
+    for (const std::string& next_node : node.next_nodes) {
+      if (context.node_names.find(next_node) == context.node_names.end()) {
+        LOG(FATAL) << "next references unknown node: " << next_node;
       }
-      context.downstream_nodes[dep].emplace_back(node.name);
+      context.downstream_nodes[node.name].emplace_back(next_node);
+      int32_t& upstream_count = context.upstream_counts[next_node];
+      ++upstream_count;
+      if (upstream_count > 1) {
+        LOG(FATAL) << "P0 node supports at most one upstream node: "
+                   << next_node;
+      }
     }
   }
 
-  for (const auto& downstream_entry : context.downstream_nodes) {
-    if (downstream_entry.second.size() > 1) {
-      LOG(FATAL) << "P0 node supports at most one downstream node: "
-                 << downstream_entry.first;
+  for (const NodeConfig& node : config.nodes) {
+    if (context.upstream_counts.find(node.name) ==
+        context.upstream_counts.end()) {
+      context.root_nodes.emplace_back(node.name);
     }
   }
 }
@@ -305,8 +312,7 @@ void validate_endpoints(const GraphConfig& config,
   }
 
   for (const NodeConfig& node : config.nodes) {
-    if (node.final_output && context.downstream_nodes.find(node.name) !=
-                                 context.downstream_nodes.end()) {
+    if (node.final_output && !node.next_nodes.empty()) {
       LOG(FATAL) << "final output node cannot have downstream node: "
                  << node.name;
     }
@@ -365,21 +371,28 @@ void GraphConfig::build_indices() {
   final_output_nodes.reserve(nodes.size());
   root_nodes.clear();
   root_nodes.reserve(nodes.size());
+  std::vector<int32_t> upstream_counts(nodes.size(), 0);
 
   for (size_t index = 0; index < nodes.size(); ++index) {
     node_index.emplace(nodes[index].name, index);
   }
 
   for (const NodeConfig& node : nodes) {
-    if (node.deps.empty()) {
-      root_nodes.emplace_back(node.name);
-    }
     if (node.final_output) {
       final_output_nodes.emplace_back(node.name);
     }
-    for (const std::string& dep : node.deps) {
-      auto dep_it = node_index.find(dep);
-      downstream_nodes[dep_it->second].emplace_back(node.name);
+    auto node_it = node_index.find(node.name);
+    for (const std::string& next_node : node.next_nodes) {
+      auto next_it = node_index.find(next_node);
+      CHECK(next_it != node_index.end()) << "Unknown next node: " << next_node;
+      downstream_nodes[node_it->second].emplace_back(next_node);
+      ++upstream_counts[next_it->second];
+    }
+  }
+
+  for (size_t index = 0; index < nodes.size(); ++index) {
+    if (upstream_counts[index] == 0) {
+      root_nodes.emplace_back(nodes[index].name);
     }
   }
 }
@@ -415,7 +428,7 @@ void validate_graph_config(const GraphConfig& config) {
   }
   GraphValidationContext context;
   validate_nodes(config, context);
-  validate_dependencies(config, context);
+  validate_edges(config, context);
   validate_endpoints(config, context);
   validate_linear_chain(config, context);
   validate_preprocessor_config(config);

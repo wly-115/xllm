@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <glog/logging.h>
 
+#include <cstring>
 #include <optional>
 #include <string>
 #include <utility>
@@ -122,15 +123,34 @@ bool mm_data_to_proto(const MMData& mm_data, proto::MMData* proto_mm_data) {
                             proto_mm_data->mutable_dict());
   }
 
+  proto::MMDataEntry* proto_entry = proto_mm_data->add_entries();
+  proto_entry->set_type(mm_data.type());
+  proto_entry->set_is_item_vec(true);
   for (const MMDataItem& item : mm_data.items<MMItemVec>()) {
-    proto::MMDataItem* proto_item = proto_mm_data->add_items();
+    proto::MMDataItem* proto_item = proto_entry->add_items();
     proto_item->set_type(item.type());
+    proto_item->set_seq_index(item.state().seq_index());
     if (!mm_dict_to_proto(item.data(), proto_item->mutable_dict())) {
       return false;
     }
+
     const MMItemState::TokenPos& token_pos = item.state().token_pos();
-    proto_item->set_token_offset(token_pos.offset);
-    proto_item->set_token_length(token_pos.length);
+    proto::MMItemState* proto_state = proto_item->mutable_state();
+    proto_state->set_token_pos_offset(token_pos.offset);
+    proto_state->set_token_pos_length(token_pos.length);
+    if (item.state().mm_token_mask().defined() &&
+        !util::torch_to_proto(item.state().mm_token_mask().cpu().contiguous(),
+                              proto_state->mutable_mm_token_mask())) {
+      return false;
+    }
+    proto_state->set_schedule_data_key(std::string(
+        reinterpret_cast<const char*>(item.state().schedule_data().key.data),
+        XXH3_128BITS_HASH_VALUE_LEN));
+    proto_state->set_schedule_data_start_pos(
+        item.state().schedule_data().start_pos);
+    proto_state->set_schedule_data_end_pos(
+        item.state().schedule_data().end_pos);
+    proto_state->set_mm_token_num(item.state().mm_token_num());
   }
   return true;
 }
@@ -145,7 +165,7 @@ bool proto_to_mm_data(const proto::MMData& proto_mm_data, MMData* mm_data) {
     return false;
   }
 
-  if (proto_mm_data.items_size() == 0) {
+  if (proto_mm_data.entries_size() == 0) {
     std::optional<MMDict> dict = proto_to_mm_dict(proto_mm_data.dict());
     if (!dict.has_value()) {
       return false;
@@ -154,20 +174,66 @@ bool proto_to_mm_data(const proto::MMData& proto_mm_data, MMData* mm_data) {
     return true;
   }
 
+  if (proto_mm_data.entries_size() != 1) {
+    LOG(ERROR) << "NodePayload MMData must contain exactly one entry.";
+    return false;
+  }
+
+  const proto::MMDataEntry& proto_entry = proto_mm_data.entries(0);
+  if (!proto_entry.is_item_vec()) {
+    std::optional<MMDict> dict = proto_to_mm_dict(proto_entry.dict());
+    if (!dict.has_value()) {
+      return false;
+    }
+    *mm_data = MMData(proto_entry.type(), dict.value());
+    return true;
+  }
+
   MMItemVec items;
-  items.reserve(proto_mm_data.items_size());
-  for (const proto::MMDataItem& proto_item : proto_mm_data.items()) {
+  items.reserve(proto_entry.items_size());
+  for (const proto::MMDataItem& proto_item : proto_entry.items()) {
     std::optional<MMDict> dict = proto_to_mm_dict(proto_item.dict());
     if (!dict.has_value()) {
       return false;
     }
     MMDataItem item(static_cast<MMType::Value>(proto_item.type()),
                     dict.value());
-    item.mutable_state().mutable_token_pos() = {proto_item.token_offset(),
-                                                proto_item.token_length()};
+    item.mutable_state().mutable_seq_index() = proto_item.seq_index();
+    const proto::MMItemState& proto_state = proto_item.state();
+    item.mutable_state().mutable_token_pos() = {
+        static_cast<int32_t>(proto_state.token_pos_offset()),
+        static_cast<int32_t>(proto_state.token_pos_length())};
+    if (proto_state.has_mm_token_mask()) {
+      torch::Tensor mm_token_mask =
+          util::proto_to_torch(proto_state.mm_token_mask());
+      if (!mm_token_mask.defined()) {
+        return false;
+      }
+      item.mutable_state().mutable_mm_token_mask() = std::move(mm_token_mask);
+    }
+
+    const std::string& schedule_data_key = proto_state.schedule_data_key();
+    std::memset(item.mutable_state().mutable_schedule_data().key.data,
+                0,
+                XXH3_128BITS_HASH_VALUE_LEN);
+    if (!schedule_data_key.empty()) {
+      if (schedule_data_key.size() != XXH3_128BITS_HASH_VALUE_LEN) {
+        LOG(ERROR) << "Invalid MMData schedule key size: "
+                   << schedule_data_key.size();
+        return false;
+      }
+      std::memcpy(item.mutable_state().mutable_schedule_data().key.data,
+                  schedule_data_key.data(),
+                  XXH3_128BITS_HASH_VALUE_LEN);
+    }
+    item.mutable_state().mutable_schedule_data().start_pos =
+        proto_state.schedule_data_start_pos();
+    item.mutable_state().mutable_schedule_data().end_pos =
+        proto_state.schedule_data_end_pos();
+    item.mutable_state().mutable_mm_token_num() = proto_state.mm_token_num();
     items.emplace_back(std::move(item));
   }
-  *mm_data = MMData(proto_mm_data.type(), items);
+  *mm_data = MMData(proto_entry.type(), items);
   return true;
 }
 

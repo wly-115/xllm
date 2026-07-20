@@ -30,6 +30,7 @@ struct NodeRuntimePlan {
   std::string adapter;
   std::string service_target;
   std::string result_target;
+  std::string ready_target;
   std::optional<std::string> downstream_node_name;
   std::optional<std::string> downstream_endpoint;
   bool final_output = false;
@@ -38,7 +39,11 @@ struct NodeRuntimePlan {
   bool is_leader = false;
 };
 
+void apply_node_engine_config(const GraphConfig& config,
+                              int32_t graph_global_rank);
+
 NodeRuntimePlan build_node_runtime_plan(const GraphConfig& config,
-                                        int32_t graph_global_rank);
+                                        int32_t graph_global_rank,
+                                        const std::string& ready_target);
 
 }  // namespace xllm

@@ -211,6 +211,7 @@ message MMItemState {
   bytes schedule_data_key = 4;
   int32 schedule_data_start_pos = 5;
   int32 schedule_data_end_pos = 6;
+  int32 mm_token_num = 7;
 }
 
 message MMDataItem {

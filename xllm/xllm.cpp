@@ -19,19 +19,25 @@ limitations under the License.
 #include <pybind11/embed.h>
 #include <torch/torch.h>
 
+#include <chrono>
 #include <csignal>
 #include <filesystem>
 #include <memory>
 #include <random>
+#include <thread>
 #include <unordered_set>
+#include <vector>
 
 #include "api_service/api_service.h"
+#include "core/common/global_flags.h"
 #include "core/common/instance_name.h"
 #include "core/common/metrics.h"
 #include "core/common/options.h"
 #include "core/common/types.h"
 #include "core/distributed_runtime/dit_master.h"
+#include "core/distributed_runtime/engine_server.h"
 #include "core/distributed_runtime/master.h"
+#include "core/distributed_runtime/omni_master.h"
 #include "core/distributed_runtime/vlm_master.h"
 #include "core/framework/config/beam_search_config.h"
 #include "core/framework/config/config_utils.h"
@@ -52,6 +58,8 @@ limitations under the License.
 #include "core/framework/config/scheduler_config.h"
 #include "core/framework/config/service_config.h"
 #include "core/framework/config/speculative_config.h"
+#include "core/framework/ensemble/engine_config.h"
+#include "core/framework/ensemble/graph_config.h"
 #include "core/framework/xtensor/global_xtensor.h"
 #include "core/framework/xtensor/options.h"
 #include "core/framework/xtensor/xtensor_allocator.h"
@@ -63,13 +71,38 @@ limitations under the License.
 #include "server/xllm_server_registry.h"
 using namespace xllm;
 
-static std::atomic<uint32_t> signal_received{0};
+static volatile std::sig_atomic_t signal_received = 0;
 
 static const std::unordered_set<std::string> prefill_sp_supported_model_set = {
     "deepseek_v32",
     "glm_moe_dsa"};
 
 namespace {
+
+constexpr std::chrono::milliseconds kShutdownPollInterval(1000);
+
+void shutdown_handler(int signal);
+
+std::string resolve_omni_graph_config_path() {
+  std::string graph_config_path = FLAGS_omni_graph_config_path;
+  if (const auto& json_config = config::get_parsed_json_config()) {
+    graph_config_path = json_config->value_or<std::string>(
+        "omni_graph_config_path", graph_config_path);
+  }
+  return graph_config_path;
+}
+
+std::shared_ptr<GraphConfig> prepare_omni_graph_config() {
+  const std::string graph_config_path = resolve_omni_graph_config_path();
+  if (graph_config_path.empty()) {
+    return nullptr;
+  }
+
+  std::shared_ptr<GraphConfig> graph_config = std::make_shared<GraphConfig>();
+  load_graph_config_from_file(graph_config_path, *graph_config);
+  apply_node_engine_config(*graph_config, FLAGS_node_rank);
+  return graph_config;
+}
 
 void initialize_configs() {
   BeamSearchConfig::get_instance().initialize();
@@ -89,6 +122,17 @@ void initialize_configs() {
   SchedulerConfig::get_instance().initialize();
   ServiceConfig::get_instance().initialize();
   SpeculativeConfig::get_instance().initialize();
+}
+
+void install_shutdown_handler() {
+  std::signal(SIGINT, shutdown_handler);
+  std::signal(SIGTERM, shutdown_handler);
+}
+
+void wait_for_shutdown_signal() {
+  while (signal_received == 0) {
+    std::this_thread::sleep_for(kShutdownPollInterval);
+  }
 }
 
 Options create_options(const std::string& instance_name, bool is_local) {
@@ -128,6 +172,8 @@ Options create_options(const std::string& instance_name, bool is_local) {
       .max_cache_size(kv_cache_config.max_cache_size())
       .max_memory_utilization(kv_cache_config.max_memory_utilization())
       .enable_prefix_cache(kv_cache_config.enable_prefix_cache())
+      .max_linear_state_cache_slots(
+          kv_cache_config.max_linear_state_cache_slots())
       .max_tokens_per_batch(scheduler_config.max_tokens_per_batch())
       .max_seqs_per_batch(scheduler_config.max_seqs_per_batch())
       .max_tokens_per_chunk_for_prefill(
@@ -236,11 +282,70 @@ Options create_options(const std::string& instance_name, bool is_local) {
 
 }  // namespace
 
+namespace {
+
 void shutdown_handler(int signal) {
-  // TODO: gracefully shutdown the server
-  LOG(WARNING) << "Received signal " << signal << ", stopping server...";
-  exit(1);
+  signal_received = static_cast<std::sig_atomic_t>(signal);
 }
+
+int run_omni(const std::shared_ptr<GraphConfig>& graph_config) {
+  CHECK(graph_config != nullptr) << "graph config cannot be null.";
+  const DistributedConfig& distributed_config =
+      DistributedConfig::get_instance();
+  const ServiceConfig& service_config = ServiceConfig::get_instance();
+  const ModelConfig& model_config = ModelConfig::get_instance();
+  const int32_t graph_global_rank = distributed_config.node_rank();
+
+  const NodeRuntimePlan node_runtime_plan = build_node_runtime_plan(
+      *graph_config, graph_global_rank, service_config.omni_master_addr());
+
+  std::unique_ptr<OmniMaster> omni_master;
+  if (graph_global_rank == 0) {
+    config::dump_startup_config();
+    omni_master = std::make_unique<OmniMaster>(
+        *graph_config, service_config.omni_master_addr());
+    if (!omni_master->start_result_service()) {
+      LOG(ERROR) << "Failed to start OmniMaster result service.";
+      return -1;
+    }
+    if (!omni_master->start_ready_service()) {
+      LOG(ERROR) << "Failed to start OmniMaster ready service.";
+      return -1;
+    }
+  }
+
+  EngineServer engine_server(node_runtime_plan);
+
+  if (graph_global_rank == 0) {
+    if (!omni_master->complete_startup()) {
+      LOG(ERROR) << "Failed to complete OmniMaster startup for node_rank="
+                 << graph_global_rank;
+      return -1;
+    }
+
+    XllmServer* http_server =
+        ServerRegistry::get_instance().register_server("HttpServer");
+    const std::string model_id = model_config.model_id().empty()
+                                     ? graph_config->graph_name
+                                     : model_config.model_id();
+    const std::vector<std::string> model_names = {model_id};
+    const std::vector<std::string> model_versions = {model_id};
+    auto api_service = std::make_unique<APIService>(
+        /*master=*/nullptr, model_names, model_versions, omni_master.get());
+    if (!http_server->start(std::move(api_service))) {
+      LOG(ERROR) << "Failed to start HttpServer for omni startup.";
+      ServerRegistry::get_instance().unregister_server("HttpServer");
+      return -1;
+    }
+    return 0;
+  }
+
+  install_shutdown_handler();
+  wait_for_shutdown_signal();
+  return 0;
+}
+
+}  // namespace
 
 void validate_config(const std::string& model_type) {
   ModelConfig& model_config = ModelConfig::get_instance();
@@ -347,7 +452,11 @@ void validate_config(const std::string& model_type) {
   model_config.normalize_cpp_chat_template(model_type);
 }
 
-int run() {
+int run(const std::shared_ptr<GraphConfig>& graph_config) {
+  if (graph_config != nullptr) {
+    return run_omni(graph_config);
+  }
+
   ModelConfig& model_config = ModelConfig::get_instance();
   KVCacheConfig& kv_cache_config = KVCacheConfig::get_instance();
   BeamSearchConfig& beam_search_config = BeamSearchConfig::get_instance();
@@ -513,13 +622,15 @@ int main(int argc, char** argv) {
   FLAGS_minloglevel = 0;
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging("xllm");
+  const std::shared_ptr<GraphConfig> graph_config = prepare_omni_graph_config();
   initialize_configs();
 
-  // Check if model path is provided
-  if (::xllm::ModelConfig::get_instance().model().empty()) {
+  // Check if model path is provided for standard serving.
+  if (graph_config == nullptr &&
+      ::xllm::ModelConfig::get_instance().model().empty()) {
     HelpFormatter::print_error("--model flag is required");
     return 1;
   }
 
-  return run();
+  return run(graph_config);
 }

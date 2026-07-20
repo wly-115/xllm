@@ -25,10 +25,12 @@ namespace xllm {
 using ImageGenerationCall = NonStreamCall<proto::ImageGenerationRequest,
                                           proto::ImageGenerationResponse>;
 class DiTMaster;
+class OmniMaster;
 // a class to handle image generation requests
 class ImageGenerationServiceImpl : public APIServiceImpl<ImageGenerationCall> {
  public:
-  ImageGenerationServiceImpl(DiTMaster* master,
+  ImageGenerationServiceImpl(DiTMaster* dit_master,
+                             OmniMaster* omni_master,
                              const std::vector<std::string>& models);
 
   // brpc call_data needs to use shared_ptr
@@ -36,7 +38,8 @@ class ImageGenerationServiceImpl : public APIServiceImpl<ImageGenerationCall> {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(ImageGenerationServiceImpl);
-  DiTMaster* master_ = nullptr;
+  DiTMaster* dit_master_ = nullptr;
+  OmniMaster* omni_master_ = nullptr;
 };
 
 }  // namespace xllm

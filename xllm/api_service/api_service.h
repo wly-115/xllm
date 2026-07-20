@@ -37,6 +37,7 @@ limitations under the License.
 namespace xllm {
 
 class ClosureGuard;
+class OmniMaster;
 class ServiceImplFactory;
 
 class APIService : public proto::XllmAPIService {
@@ -45,7 +46,8 @@ class APIService : public proto::XllmAPIService {
  public:
   APIService(Master* master,
              const std::vector<std::string>& model_names,
-             const std::vector<std::string>& model_versions);
+             const std::vector<std::string>& model_versions,
+             OmniMaster* omni_master = nullptr);
   ~APIService() = default;
 
   void Completions(::google::protobuf::RpcController* controller,

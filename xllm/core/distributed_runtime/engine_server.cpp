@@ -25,7 +25,6 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "core/common/global_flags.h"
 #include "core/distributed_runtime/ar_engine_service.h"
 #include "core/distributed_runtime/dit_engine.h"
 #include "core/distributed_runtime/dit_engine_service.h"
@@ -165,7 +164,8 @@ void EngineServer::stop_scheduler() {
 }
 
 void EngineServer::register_ready() {
-  CHECK(!FLAGS_omni_master_addr.empty()) << "omni_master_addr cannot be empty.";
+  CHECK(!runtime_plan_.ready_target.empty())
+      << "omni master ready target cannot be empty.";
 
   brpc::ChannelOptions options;
   options.connection_type = "single";
@@ -173,12 +173,12 @@ void EngineServer::register_ready() {
   options.max_retry = kReadyRegisterMaxRetry;
 
   brpc::Channel channel;
-  CHECK_EQ(channel.Init(FLAGS_omni_master_addr.c_str(),
+  CHECK_EQ(channel.Init(runtime_plan_.ready_target.c_str(),
                         /*load_balancer=*/"",
                         &options),
            0)
       << "Failed to initialize ready registration channel to "
-      << FLAGS_omni_master_addr;
+      << runtime_plan_.ready_target;
 
   proto::EnsembleNodeReadyRequest request;
   request.set_node_name(runtime_plan_.node_name);
@@ -189,7 +189,7 @@ void EngineServer::register_ready() {
   stub.RegisterReady(&controller, &request, &response, nullptr);
   CHECK(!controller.Failed())
       << "Failed to register ready for graph node " << runtime_plan_.node_name
-      << " to " << FLAGS_omni_master_addr << ": " << controller.ErrorText();
+      << " to " << runtime_plan_.ready_target << ": " << controller.ErrorText();
   CHECK(response.ok()) << "Ready registration rejected for graph node "
                        << runtime_plan_.node_name;
 }
