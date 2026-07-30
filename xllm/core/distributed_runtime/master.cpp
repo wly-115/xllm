@@ -413,6 +413,8 @@ Master::Master(const Options& options, EngineType type)
         .ep_size(options.ep_size())
         .max_tokens_per_batch(options_.max_tokens_per_batch())
         .max_seqs_per_batch(options_.max_seqs_per_batch())
+        .host_blocks_factor(options_.host_blocks_factor())
+        .layers_wise_copy_batchs(options_.layers_wise_copy_batchs())
         .enable_graph(options_.enable_graph())
         .enable_graph_mode_decode_no_padding(
             options_.enable_graph_mode_decode_no_padding())

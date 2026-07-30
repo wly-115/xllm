@@ -12,6 +12,18 @@ cc_test(
     GTest::gtest_main
 )
 
+cc_test(
+  NAME
+    hierarchy_block_manager_pool_test
+  SRCS
+    hierarchy_block_manager_pool_test.cpp
+  DEPS
+    :block
+    :config
+    :prefix_cache
+    GTest::gtest_main
+)
+
 if(USE_NPU)
   cc_test(
     NAME

@@ -332,11 +332,17 @@ void HierarchyBlockManagerPool::allocate_shared(Sequence* sequence) {
 
 void HierarchyBlockManagerPool::allocate_host_shared(Sequence* sequence) {
   if (options_.enable_prefix_cache()) {
+    sequence->update_block_hashes(static_cast<uint32_t>(options_.block_size()),
+                                  options_.hasher_type());
     int32_t dp_rank = BlockManagerPool::get_dp_rank(sequence);
     std::vector<Block> shared_blocks =
         host_block_managers_[dp_rank]
             .at(BlockType::KV)
-            ->allocate_shared(sequence->tokens());
+            ->allocate_shared(
+                sequence->tokens(),
+                /*existed_shared_blocks=*/{},
+                sequence->mm_data(),
+                sequence->block_hashes());
     sequence->add_shared_host_blocks(BlockType::KV, std::move(shared_blocks));
   }
 }

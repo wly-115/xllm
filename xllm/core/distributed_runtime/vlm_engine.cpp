@@ -35,6 +35,7 @@ limitations under the License.
 #include "core/framework/config/execution_config.h"
 #include "core/framework/config/kv_cache_config.h"
 #include "core/framework/config/scheduler_config.h"
+#include "framework/block/hierarchy_block_manager_pool.h"
 #include "framework/kv_cache/kv_cache_estimation.h"
 #include "framework/kv_cache/kv_cache_shape.h"
 #include "framework/kv_cache/kv_cache_utils.h"
@@ -331,7 +332,7 @@ bool VLMEngine::allocate_kv_cache(const KVCacheCapacity& kv_cache_cap) {
   // initialize block manager
   BlockManagerPool::Options options;
   options.num_blocks(kv_cache_cap.n_blocks())
-      .host_num_blocks(0)  // no host cache for vlm engine currently.
+      .host_num_blocks(kv_cache_cap.n_blocks() * options_.host_blocks_factor())
       .block_size(block_size)
       .enable_linear_state(enable_linear_attention)
       .enable_prefix_cache(options_.enable_prefix_cache())
@@ -351,7 +352,21 @@ bool VLMEngine::allocate_kv_cache(const KVCacheCapacity& kv_cache_cap) {
     options.linear_state_num_slots(
         static_cast<int32_t>(kv_cache_cap.num_linear_state_blocks()));
   }
-  kv_cache_manager_ = std::make_unique<BlockManagerPool>(options, dp_size_);
+  if (options_.host_blocks_factor() > 1.0) {
+    CHECK(!enable_linear_attention)
+        << "host_blocks_factor > 1 (host prefix-cache offload) does not "
+           "support linear-attention models yet. Disable "
+           "--host_blocks_factor for linear-attention models.";
+    CHECK(!util::is_deepseek_v4_model_type(args_.model_type()))
+        << "host_blocks_factor > 1 (host prefix-cache offload) does not "
+           "support DeepSeek-V4 yet. Disable --host_blocks_factor for "
+           "DeepSeek-V4 models.";
+    options.enable_host_offload(true);
+    kv_cache_manager_ =
+        std::make_unique<HierarchyBlockManagerPool>(options, this, dp_size_);
+  } else {
+    kv_cache_manager_ = std::make_unique<BlockManagerPool>(options, dp_size_);
+  }
 
   // init kv cache for each worker in parallel
   std::vector<folly::SemiFuture<bool>> futures;
@@ -498,6 +513,30 @@ std::vector<int64_t> VLMEngine::get_active_activation_memory() const {
     active_activation_memories.push_back(result.value());
   }
   return active_activation_memories;
+}
+
+std::vector<folly::SemiFuture<uint32_t>> VLMEngine::transfer_kv_blocks(
+    const uint32_t dp_rank,
+    const std::vector<BlockTransferInfo>& block_transfer_info) {
+  std::vector<folly::SemiFuture<uint32_t>> futures;
+  futures.reserve(dp_local_tp_size_);
+
+  for (uint32_t tp_rank = 0; tp_rank < dp_local_tp_size_; ++tp_rank) {
+    futures.emplace_back(worker_clients_[tp_rank + dp_local_tp_size_ * dp_rank]
+                             ->transfer_kv_blocks(block_transfer_info));
+  }
+
+  return std::move(futures);
+}
+
+void VLMEngine::transfer_kv_blocks(
+    const uint32_t dp_rank,
+    const uint64_t batch_id,
+    const std::vector<BlockTransferInfo>& block_transfer_info) {
+  for (uint32_t tp_rank = 0; tp_rank < dp_local_tp_size_; ++tp_rank) {
+    worker_clients_[tp_rank + dp_local_tp_size_ * dp_rank]->transfer_kv_blocks(
+        batch_id, block_transfer_info);
+  }
 }
 
 std::vector<ForwardInput> VLMEngine::prepare_inputs(std::vector<Batch>& batch) {

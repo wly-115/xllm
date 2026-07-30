@@ -53,6 +53,15 @@ class VLMEngine : public Engine {
   // return the active activation memory
   std::vector<int64_t> get_active_activation_memory() const override;
 
+  std::vector<folly::SemiFuture<uint32_t>> transfer_kv_blocks(
+      const uint32_t dp_rank,
+      const std::vector<BlockTransferInfo>& block_transfer_info) override;
+
+  void transfer_kv_blocks(
+      const uint32_t dp_rank,
+      const uint64_t batch_id,
+      const std::vector<BlockTransferInfo>& block_transfer_info) override;
+
  private:
   bool init_model();
   KVCacheCapacity estimate_kv_cache_capacity();
